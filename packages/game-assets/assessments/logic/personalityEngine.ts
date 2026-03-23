@@ -224,8 +224,11 @@ const CHARACTER_MAP: Record<string, string> = {
 }
 
 export function getCharacterNameList() {
-  return [...new Set(Object.values(CHARACTER_MAP))]
+  return Object.values(CHARACTER_MAP).filter(
+    (value, index, array) => array.indexOf(value) === index
+  )
 }
+
 
 export function getCharacterByBaseCode(baseCode: string) {
   return CHARACTER_MAP[baseCode] || "神秘角色"
