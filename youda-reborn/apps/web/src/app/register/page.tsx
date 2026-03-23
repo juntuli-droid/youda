@@ -38,12 +38,14 @@ function RegisterPageInner() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || '注册失败');
+        const errorMsg = data.details ? `${data.error}: ${data.details}` : data.error;
+        throw new Error(errorMsg || '注册失败');
       }
 
       router.push(callbackUrl);
       router.refresh();
     } catch (err: unknown) {
+      console.error("Register error:", err);
       if (err instanceof Error) {
         setError(err.message);
       } else {

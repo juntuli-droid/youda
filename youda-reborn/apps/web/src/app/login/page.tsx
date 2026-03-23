@@ -30,12 +30,14 @@ function LoginPageInner() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || '登录失败');
+        const errorMsg = data.details ? `${data.error}: ${data.details}` : data.error;
+        throw new Error(errorMsg || '登录失败');
       }
 
       router.push(callbackUrl);
       router.refresh(); // Refresh to update navbar state
     } catch (err: unknown) {
+      console.error("Login error:", err);
       if (err instanceof Error) {
         setError(err.message);
       } else {
