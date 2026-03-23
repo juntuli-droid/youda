@@ -1,0 +1,32 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Install pnpm
+      run: npm install -g pnpm
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+
+    - name: Build applications
+      run: pnpm run build
+
+    # Example deployment step
+    - name: Deploy to ECS/Tencent Cloud
+      run: |
+        echo "Add your SSH/rsync commands here to deploy docker-compose.yml to the remote server"
+        # ssh user@host "cd /path/to/project && git pull && docker-compose up -d --build"

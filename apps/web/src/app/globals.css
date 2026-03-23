@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F2F3F5;
+  --foreground: #181A1F;
+}
+
+/* 沉浸式亮色主题变量（针对测评流程特化，与主页保持一致） */
+.light-assessment-theme {
+  --background: #F7F9FC;
+  --foreground: #181A1F;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .game-shell {
+    @apply min-h-screen w-full flex flex-col relative overflow-x-hidden;
+    background-color: var(--background);
+  }
+  
+  .kook-panel {
+    @apply rounded-[16px] border border-[#E3E5E8];
+    background-color: #FFFFFF;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  }
+
+  /* 亮色玻璃态卡片组件 */
+  .glass-panel {
+    @apply rounded-[24px] border border-white/40;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+  }
+
+  /* 选项悬停光效 */
+  .option-hover-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .option-hover-glow::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 50%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(46,211,158,0.2), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.5s ease;
+  }
+  .option-hover-glow:hover::before {
+    left: 150%;
+  }
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(46, 211, 158, 0.5);
+}

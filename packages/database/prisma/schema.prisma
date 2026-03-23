@@ -1,0 +1,116 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String   @id @default(uuid())
+  phoneNumber    String?  @unique
+  wechatOpenId   String?  @unique
+  demoSessionId  String?  @unique
+  passwordHash   String?
+  nickname       String
+  avatarUrl      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  userResults    UserResult[]
+  logs           Log[]
+
+  @@map("user")
+}
+
+model Question {
+  id          String   @id @default(uuid())
+  content     String   @db.Text
+  dimensionId String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
+  options     Option[]
+
+  @@map("question")
+}
+
+model Option {
+  id          String   @id @default(uuid())
+  questionId  String
+  content     String   @db.Text
+  score       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  question    Question @relation(fields: [questionId], references: [id])
+
+  @@map("option")
+}
+
+model Dimension {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  weight      Float    @default(1.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions   Question[]
+
+  @@map("dimension")
+}
+
+model Result {
+  id          String   @id @default(uuid())
+  typeCode    String   @unique // e.g. INTJ, ENFP
+  name        String
+  description String   @db.Text
+  avatarUrl   String?
+  posterUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userResults UserResult[]
+
+  @@map("result")
+}
+
+model UserResult {
+  id          String   @id @default(uuid())
+  userId      String
+  resultId    String
+  scores      Json     // Detailed dimension scores
+  completedAt DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+  result      Result   @relation(fields: [resultId], references: [id])
+
+  @@map("user_result")
+}
+
+model Admin {
+  id          String   @id @default(uuid())
+  username    String   @unique
+  password    String
+  role        String   @default("ADMIN")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("admin")
+}
+
+model Log {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@map("log")
+}

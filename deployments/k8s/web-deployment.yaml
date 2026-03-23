@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: youda-web
+  namespace: youda-prod
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: youda-web
+  template:
+    metadata:
+      labels:
+        app: youda-web
+    spec:
+      containers:
+      - name: web
+        image: registry.example.com/youda/web:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NEXT_PUBLIC_API_URL
+          value: "https://api.youda.com"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: youda-web-svc
+  namespace: youda-prod
+spec:
+  selector:
+    app: youda-web
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: ClusterIP
