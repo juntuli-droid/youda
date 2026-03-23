@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error('Register error:', error);
-    // @ts-ignore
+    // @ts-expect-error
     return NextResponse.json({ error: '服务器内部错误', details: error?.message || String(error) }, { status: 500 });
   }
 }
