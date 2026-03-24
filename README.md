@@ -1,4 +1,4 @@
-项目主页：(https://syncup-demo.vercel.app/) （目前需要科学上网）
+项目主页：(https://youda-q6b7.vercel.app/) （目前需要科学上网）
 
  # 🌍 为什么做这个项目
 
