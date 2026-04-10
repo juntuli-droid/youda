@@ -3,12 +3,22 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { findUserByEmail, findUserByUsername, createUser } from '@/lib/db';
-import { signToken } from '@/lib/auth';
+import { Prisma, createUser, findUserSnapshotByEmail, findUserSnapshotByUsername } from '@/lib/db';
+import { attachSessionCookies } from '@/lib/auth-cookies';
+import { createSessionForUser } from '@/lib/session-service';
+import { enforceRateLimit } from '@/lib/rate-limit';
+import { getRequestIp } from '@/lib/request-meta';
+import { captureRouteException } from '@/lib/monitoring';
 
 export async function POST(request: Request) {
+  let body:
+    | { username?: string; email?: string; password?: string }
+    | undefined
+
   try {
-    const { username, email, password } = await request.json();
+    body = await request.json();
+    const { username, email, password } = body ?? {};
+    const ipAddress = getRequestIp(request);
 
     if (!username || !email || !password) {
       return NextResponse.json({ error: '请填写所有必填字段' }, { status: 400 });
@@ -18,48 +28,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '密码长度至少需要 6 个字符' }, { status: 400 });
     }
 
-    const existingEmail = findUserByEmail(email);
+    const ipRateLimit = await enforceRateLimit(`register:ip:${ipAddress}`, 5, 60 * 60);
+    if (!ipRateLimit.allowed) {
+      return NextResponse.json({ error: '注册过于频繁，请稍后再试' }, { status: 429 });
+    }
+
+    const accountRateLimit = await enforceRateLimit(`register:email:${email}`, 5, 60 * 60);
+    if (!accountRateLimit.allowed) {
+      return NextResponse.json({ error: '该账号尝试次数过多，请稍后再试' }, { status: 429 });
+    }
+
+    const existingEmail = await findUserSnapshotByEmail(email);
     if (existingEmail) {
       return NextResponse.json({ error: '该邮箱已被注册' }, { status: 400 });
     }
 
-    const existingUsername = findUserByUsername(username);
+    const existingUsername = await findUserSnapshotByUsername(username);
     if (existingUsername) {
       return NextResponse.json({ error: '该用户名已被占用' }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const newUser = {
-      id: Math.random().toString(36).substring(2, 15),
+    const newUser = await createUser({
       username,
       email,
       passwordHash,
-      unlockedBadges: ['BADGE_005', 'BADGE_006', 'BADGE_007'], // Give some default achievement badges to select from
-      badges: [],
-      createdAt: new Date().toISOString()
-    };
+      unlockedBadges: ['BADGE_005', 'BADGE_006', 'BADGE_007'],
+      badges: []
+    });
+    const session = await createSessionForUser(newUser, request);
 
-    createUser(newUser);
-
-    const token = await signToken({ id: newUser.id, username: newUser.username });
+    if (!('accessToken' in session) || !('refreshToken' in session)) {
+      return NextResponse.json({ error: '注册成功，但会话初始化失败，请重新登录' }, { status: 202 });
+    }
 
     const response = NextResponse.json({
       message: '注册成功',
       user: { id: newUser.id, username: newUser.username, email: newUser.email }
     });
 
-    response.cookies.set('sessionToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7 // 7 days
-    });
-
+    attachSessionCookies(response, session.accessToken, session.refreshToken)
     return response;
   } catch (error) {
-    console.error('Register error:', error);
-    // @ts-expect-error temporary type mismatch
-    return NextResponse.json({ error: '服务器内部错误', details: error?.message || String(error) }, { status: 500 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ error: '邮箱或用户名已存在' }, { status: 409 });
+    }
+
+    await captureRouteException(request, error, {
+      event: 'auth.register.failed',
+      requestBody: body
+    })
+
+    return NextResponse.json({ error: '服务器内部错误', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

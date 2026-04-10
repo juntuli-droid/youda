@@ -1,0 +1,20 @@
+USE youda_prod;
+
+DROP TABLE IF EXISTS audit_events;
+DROP TABLE IF EXISTS match_logs;
+DROP TABLE IF EXISTS match_queue_entries;
+DROP TABLE IF EXISTS voice_room_signals;
+DROP TABLE IF EXISTS voice_room_participants;
+DROP TABLE IF EXISTS user_reports;
+DROP TABLE IF EXISTS block_relations;
+DROP TABLE IF EXISTS login_challenge_tokens;
+DROP TABLE IF EXISTS login_sessions;
+DROP TABLE IF EXISTS password_reset_tokens;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS careers;
+DROP TABLE IF EXISTS vlogs;
+DROP TABLE IF EXISTS chat_message_receipts;
+DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS matches;
+DROP TABLE IF EXISTS friends;
+DROP TABLE IF EXISTS users;

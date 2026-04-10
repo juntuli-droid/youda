@@ -2,29 +2,18 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
-import { getUsers } from '@/lib/db';
+import { getAuthenticatedUser, getAuthenticatedUserProfile } from '@/lib/current-user';
+import { captureRouteException } from '@/lib/monitoring';
 
 export async function GET(request: Request) {
   try {
-    const cookies = request.headers.get('cookie');
-    const sessionTokenMatch = cookies?.match(/sessionToken=([^;]+)/);
-    const token = sessionTokenMatch ? sessionTokenMatch[1] : null;
-
-    if (!token) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
-
-    const payload = await verifyToken(token);
-    if (!payload || !payload.id) {
-      return NextResponse.json({ error: '无效的会话' }, { status: 401 });
-    }
-
-    const users = getUsers();
-    const user = users.find((u) => u.id === payload.id);
+    const includeProfile = new URL(request.url).searchParams.get('include') === 'profile'
+    const user = includeProfile
+      ? await getAuthenticatedUserProfile(request)
+      : await getAuthenticatedUser(request)
 
     if (!user) {
-      return NextResponse.json({ error: '用户不存在' }, { status: 404 });
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
     }
 
     return NextResponse.json({
@@ -32,16 +21,21 @@ export async function GET(request: Request) {
         id: user.id,
         username: user.username,
         email: user.email,
+        publicId: user.publicId,
         nickname: user.nickname,
         avatarUrl: user.avatarUrl,
+        personalityCode: user.personalityCode,
         badges: user.badges || [],
         unlockedBadges: user.unlockedBadges || [],
-        careers: user.careers || [],
-        vlogs: user.vlogs || []
+        careers: includeProfile ? user.careers || [] : [],
+        vlogs: includeProfile ? user.vlogs || [] : []
       }
     });
   } catch (error) {
-    console.error('Me error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    await captureRouteException(request, error, {
+      event: 'auth.me.failed'
+    })
+
+    return NextResponse.json({ error: '服务器内部错误', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

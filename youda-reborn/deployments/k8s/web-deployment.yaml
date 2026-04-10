@@ -19,8 +19,68 @@ spec:
         ports:
         - containerPort: 3000
         env:
+        - name: APP_ENV
+          value: "production"
+        - name: APP_BASE_URL
+          value: "https://youda.com"
         - name: NEXT_PUBLIC_API_URL
           value: "https://api.youda.com"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: redis-url
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: database-url
+        - name: DIRECT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: direct-database-url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: jwt-secret
+        - name: JWT_REFRESH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: jwt-refresh-secret
+        - name: SENDGRID_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: sendgrid-api-key
+        - name: SENDGRID_FROM_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: sendgrid-from-email
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: sentry-dsn
+        - name: NEXT_PUBLIC_SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: next-public-sentry-dsn
+        - name: TURN_SHARED_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: youda-web-secrets
+              key: turn-shared-secret
+        - name: TURN_UDP_URL
+          value: "turn:turn.youda.example.com:3478?transport=udp"
+        - name: TURN_TLS_URL
+          value: "turns:turn.youda.example.com:5349?transport=tcp"
+        - name: TURN_CREDENTIAL_TTL_SECONDS
+          value: "3600"
         resources:
           requests:
             cpu: "250m"

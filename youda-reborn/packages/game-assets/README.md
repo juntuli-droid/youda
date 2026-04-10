@@ -1,6 +1,11 @@
 # 游戏资源管理中心（Resource Pack）
 
-该目录是项目的统一资源归档入口，面向前端重构与跨框架迁移使用。
+该目录是项目的统一资源清单与逻辑入口，面向前端重构与跨框架迁移使用。
+当前约定如下：
+
+- `packages/game-assets/` 负责维护测评逻辑、资源 manifest、索引与校验脚本
+- `apps/web/public/game-assets/` 负责承载 Web 运行时实际访问到的静态资源
+- 校验脚本会同时检查 package 侧 manifest 与 Web public 侧发布副本是否一致
 
 ## 目录结构
 
@@ -44,10 +49,11 @@
 - 发布流程建议：
   1. 新增/替换资源
   2. 更新 `avatars/manifest.json` 与 `badges/manifest.json`
-  3. 执行 `node resources/game-assets/scripts/verify-resource-pack.mjs`
+  3. 执行 `node packages/game-assets/scripts/verify-resource-pack.mjs`
   4. 更新 `VERSION.json` 和 `CHANGELOG.md`
 
 ## 调用建议
 
 - 程序调用优先读取 `avatars/manifest.json` 和 `badges/manifest.json`
+- Web 运行时通过 `/game-assets/**` 访问 `apps/web/public/game-assets/` 下的发布资源
 - 业务逻辑引用 `inventory/assets-manifest.json` 作为统一入口

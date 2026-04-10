@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -9,15 +9,68 @@ function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/profile';
+  const registerCallbackUrl = searchParams.get('callbackUrl') || '/personality';
+  const challengeToken = searchParams.get('challenge');
   
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!challengeToken) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const verifyChallenge = async () => {
+      setIsLoading(true);
+      setError("");
+      setNotice("正在验证你的登录环境，请稍候...");
+
+      try {
+        const res = await fetch('/api/auth/login/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: challengeToken }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || '验证失败');
+        }
+
+        if (!cancelled) {
+          setNotice('验证成功，正在进入你的主页...');
+          router.push(callbackUrl);
+          router.refresh();
+        }
+      } catch (verifyError: unknown) {
+        if (!cancelled) {
+          setError(verifyError instanceof Error ? verifyError.message : '验证失败');
+          setNotice('');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void verifyChallenge();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [challengeToken, callbackUrl, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setNotice("");
     setIsLoading(true);
 
     try {
@@ -30,8 +83,17 @@ function LoginPageInner() {
       const data = await res.json();
 
       if (!res.ok) {
-        const errorMsg = data.details ? `${data.error}: ${data.details}` : data.error;
+        const errorMsg =
+          data.requiresChallenge
+            ? '检测到新的登录环境，请先前往邮箱点击验证链接'
+            : data.details
+              ? `${data.error}: ${data.details}`
+              : data.error;
         throw new Error(errorMsg || '登录失败');
+      }
+
+      if (data.securityNotice) {
+        setNotice(data.securityNotice);
       }
 
       router.push(callbackUrl);
@@ -72,6 +134,12 @@ function LoginPageInner() {
           </div>
         )}
 
+        {notice && (
+          <div className="mb-6 p-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-sm font-medium text-center">
+            {notice}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1">
             <label className="text-sm font-bold text-[#181A1F] ml-1">账号</label>
@@ -87,7 +155,7 @@ function LoginPageInner() {
           <div className="space-y-1">
             <div className="flex items-center justify-between ml-1">
               <label className="text-sm font-bold text-[#181A1F]">密码</label>
-              <a href="#" className="text-xs font-bold text-kook-brand hover:text-kook-brandHover">忘记密码？</a>
+              <Link href="/reset-password" className="text-xs font-bold text-kook-brand hover:text-kook-brandHover">忘记密码？</Link>
             </div>
             <input 
               type="password" 
@@ -98,12 +166,6 @@ function LoginPageInner() {
               required
             />
           </div>
-          
-          <div className="flex items-center gap-2 ml-1 pt-1">
-            <input type="checkbox" id="remember" className="w-4 h-4 rounded border-[#E3E5E8] text-kook-brand focus:ring-kook-brand/30" />
-            <label htmlFor="remember" className="text-sm text-[#5C6068] font-medium cursor-pointer">记住我</label>
-          </div>
-
           <Button 
             variant="kook-brand" 
             className="w-full py-4 text-base font-bold shadow-[0_8px_20px_rgba(46,211,158,0.25)] rounded-xl mt-4" 
@@ -114,7 +176,7 @@ function LoginPageInner() {
         </form>
 
         <div className="mt-8 text-center text-sm font-medium text-[#5C6068]">
-          还没有账号？ <Link href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`} className="text-kook-brand font-bold hover:underline">免费注册</Link>
+          还没有账号？ <Link href={`/register?callbackUrl=${encodeURIComponent(registerCallbackUrl)}`} className="text-kook-brand font-bold hover:underline">免费注册</Link>
         </div>
       </div>
     </main>

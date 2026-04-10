@@ -5,17 +5,20 @@ import { Button } from "@/components/ui/Button";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useRouter } from "next/navigation";
-import { calculatePersonality, resolveAvatar, getPersonalityMeta } from "@youda/game-assets";
+import { resolveAvatar, calculatePersonality, getPersonalityMeta } from "@youda/game-assets";
 import { motion } from "framer-motion";
-import { Gamepad2, Trophy, Video, Calendar, ArrowRight, UserPlus, Zap } from "lucide-react";
+import { Gamepad2, Trophy, Video, Calendar, ArrowRight, UserPlus, Zap, Copy, Check } from "lucide-react";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
 import { ManageBadgesModal } from "@/components/profile/ManageBadgesModal";
 import { AddCareerModal } from "@/components/profile/AddCareerModal";
 import { PublishVlogModal } from "@/components/profile/PublishVlogModal";
 import { FriendSidebar } from "@/components/friends/FriendSidebar";
 import { PrivateChat } from "@/components/friends/PrivateChat";
+import { EmptyStateCard } from "@/components/empty/EmptyStateCard";
 
 import { User, Career, Vlog } from "@/lib/db";
+import { badgeCatalogById } from "@/lib/badges";
+import { FriendListEntry } from "@/components/friends/types";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -23,6 +26,9 @@ export default function ProfilePage() {
   const [meta, setMeta] = useState<{ character?: string } | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [userLoadError, setUserLoadError] = useState<string | null>(null);
+  const [isUnauthorized, setIsUnauthorized] = useState(false);
+  const [copiedPublicId, setCopiedPublicId] = useState(false);
 
   // Modal states
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -31,18 +37,32 @@ export default function ProfilePage() {
   const [isPublishVlogOpen, setIsPublishVlogOpen] = useState(false);
   
   // Chat state
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [activeChatFriend, setActiveChatFriend] = useState<any | null>(null);
+  const [activeChatFriend, setActiveChatFriend] = useState<FriendListEntry | null>(null);
+  const hasAssessment = Boolean(personality?.code);
 
   const fetchUserData = async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me?include=profile', {
+        cache: 'no-store'
+      });
       const data = await res.json();
+      if (res.status === 401) {
+        setIsUnauthorized(true);
+        setUser(null);
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || '用户信息加载失败');
+      }
+
       if (data.user) {
+        setIsUnauthorized(false);
+        setUserLoadError(null);
         setUser(data.user);
       }
     } catch (e) {
-      console.error(e);
+      setUserLoadError(e instanceof Error ? e.message : '用户信息加载失败');
     }
   };
 
@@ -69,19 +89,56 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const allBadgesDict: Record<string, {name: string, icon: string}> = {
-    "BADGE_012": { name: "辐射段位", icon: "/game-assets/badges/icons/rank/badge-rank-radiant-active.png" },
-    "BADGE_004": { name: "超凡入圣", icon: "/game-assets/badges/icons/rank/badge-rank-ascendant-active.png" },
-    "BADGE_011": { name: "大师", icon: "/game-assets/badges/icons/rank/badge-rank-master-active.png" },
-    "BADGE_015": { name: "钻石", icon: "/game-assets/badges/icons/rank/badge-rank-diamond-active.png" },
-    "BADGE_003": { name: "白金", icon: "/game-assets/badges/icons/rank/badge-rank-platinum-plus-active.png" },
-    "BADGE_013": { name: "黄金", icon: "/game-assets/badges/icons/rank/badge-rank-gold-active.png" },
-    "BADGE_002": { name: "白银", icon: "/game-assets/badges/icons/rank/badge-rank-silver-active.png" },
-    "BADGE_014": { name: "青铜", icon: "/game-assets/badges/icons/rank/badge-rank-bronze-active.png" },
-    "BADGE_001": { name: "黑铁", icon: "/game-assets/badges/icons/rank/badge-rank-iron-active.png" },
-    "BADGE_005": { name: "百战不殆", icon: "/game-assets/badges/icons/achievement/badge-achievement-01-active.png" },
-    "BADGE_006": { name: "成就2", icon: "/game-assets/badges/icons/achievement/badge-achievement-02-active.png" },
-    "BADGE_007": { name: "成就3", icon: "/game-assets/badges/icons/achievement/badge-achievement-03-active.png" },
+  useEffect(() => {
+    if (!user?.id || !personality?.code) {
+      return;
+    }
+
+    const nextAvatar = avatar ?? undefined
+    if (user.avatarUrl === nextAvatar && user.personalityCode === personality.code) {
+      return
+    }
+
+    void fetch('/api/users/me/profile', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        avatarUrl: nextAvatar,
+        personalityCode: personality.code
+      })
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+
+        setUser((current) =>
+          current
+            ? {
+                ...current,
+                avatarUrl: nextAvatar,
+                personalityCode: personality.code
+              }
+            : current
+        );
+      })
+      .catch(() => undefined);
+  }, [avatar, personality?.code, user?.avatarUrl, user?.id, user?.personalityCode]);
+
+  const handleCopyPublicId = async () => {
+    if (!user?.publicId) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(user.publicId);
+      setCopiedPublicId(true);
+      window.setTimeout(() => setCopiedPublicId(false), 1600);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (
@@ -96,7 +153,24 @@ export default function ProfilePage() {
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.05] mix-blend-color-burn"></div>
         </div>
 
-        <div className="w-full max-w-[1200px] mx-auto z-10 flex flex-col gap-6">
+        <div className="w-full max-w-[1320px] mx-auto z-10 flex flex-col gap-6">
+        {isUnauthorized && (
+          <EmptyStateCard
+            scenario="permission-denied"
+            icon="🔐"
+            onAction={() => router.push('/login?callbackUrl=/profile')}
+          />
+        )}
+
+        {!isUnauthorized && userLoadError && (
+          <EmptyStateCard
+            scenario="network-error"
+            icon="📡"
+            onAction={() => {
+              void fetchUserData();
+            }}
+          />
+        )}
         
         {/* Banner & Header Section */}
         <motion.div 
@@ -138,6 +212,27 @@ export default function ProfilePage() {
                   <span className="w-2 h-2 rounded-full bg-kook-brand animate-pulse"></span>
                   在线 · {personality ? personality.name : "请先完成游戏人格测评"}
                 </p>
+                {user?.publicId && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-[#181A1F]/10 bg-white/80 px-3 py-1 text-xs font-black tracking-[0.14em] text-[#181A1F]/70">
+                      <span className="text-[#8D93A5]">有搭 ID</span>
+                      <span className="text-[#181A1F]">{user.publicId}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyPublicId}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#181A1F]/10 bg-white/70 px-3 py-1 text-xs font-bold text-[#5C6068] transition-colors hover:border-kook-brand/30 hover:text-kook-brand"
+                    >
+                      {copiedPublicId ? <Check size={14} /> : <Copy size={14} />}
+                      {copiedPublicId ? "已复制" : "复制 ID"}
+                    </button>
+                  </div>
+                )}
+                {personality?.code && (
+                  <div className="mt-2 inline-flex rounded-full border border-[#5C6BFF]/20 bg-[#5C6BFF]/8 px-3 py-1 text-xs font-black tracking-[0.16em] text-[#4B5AE3]">
+                    游戏人格 {personality.code}
+                  </div>
+                )}
               </div>
             </div>
             
@@ -152,6 +247,36 @@ export default function ProfilePage() {
           </div>
         </motion.div>
 
+        {!hasAssessment && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="glass-panel border border-kook-brand/15 bg-white/75 p-5 md:p-6"
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="mb-2 text-xs font-black uppercase tracking-[0.2em] text-kook-brand">
+                  新用户第一步
+                </div>
+                <h2 className="text-xl font-black text-[#181A1F] md:text-2xl">
+                  先完成游戏人格测评
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#5C6068]">
+                  测评结果会决定你的游戏人格标签、主页展示和匹配权重。先把这一步做完，主页内容和匹配建议才会完整。
+                </p>
+              </div>
+              <Button
+                variant="kook-brand"
+                className="min-h-12 px-6 text-base font-bold shadow-[0_8px_20px_rgba(46,211,158,0.2)]"
+                onClick={() => router.push('/personality')}
+              >
+                去做测评
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
         {/* 核心交互区：匹配按钮 */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
@@ -160,7 +285,7 @@ export default function ProfilePage() {
           className="w-full"
         >
           <button 
-            onClick={() => router.push('/match')}
+            onClick={() => router.push(hasAssessment ? '/match' : '/personality')}
             className="w-full relative group overflow-hidden rounded-[24px] p-[2px] shadow-[0_10px_30px_rgba(46,211,158,0.15)]"
           >
             {/* 动态渐变边框 */}
@@ -174,29 +299,31 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <h2 className="text-2xl md:text-3xl font-black text-[#181A1F] mb-1 group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-kook-brand group-hover:to-[#5C6BFF] transition-all">
-                    寻找你的游戏搭子
+                    {hasAssessment ? '寻找你的游戏搭子' : '先解锁你的游戏人格'}
                   </h2>
                   <p className="text-[#181A1F]/60 font-medium text-sm md:text-base">
-                    基于 {personality ? personality.code : "游戏"} 人格算法，为你匹配节奏最契合的灵魂队友
+                    {hasAssessment
+                      ? `基于 ${personality?.code ?? '游戏'} 人格算法，为你匹配节奏最契合的灵魂队友`
+                      : '先完成 16 道游戏人格测评题，再开始更准确的匹配和主页展示'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-white font-bold bg-kook-brand px-8 py-4 rounded-full shadow-[0_5px_15px_rgba(46,211,158,0.4)] group-hover:scale-105 transition-transform text-lg">
-                开始匹配 <ArrowRight size={20} />
+                {hasAssessment ? '开始匹配' : '开始测评'} <ArrowRight size={20} />
               </div>
             </div>
           </button>
         </motion.div>
 
         {/* Three Column Layout for Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           
-          {/* Left Column - Stats & Badges (Span 3) */}
+          {/* Left Column - Stats & Badges */}
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
-            className="space-y-6 lg:col-span-3"
+            className="space-y-6 self-start"
           >
             {/* 游戏人格卡片 */}
             <div className="glass-panel p-6 bg-white/70">
@@ -218,10 +345,13 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : (
-                <div className="p-5 bg-[#181A1F]/5 border border-[#181A1F]/10 rounded-2xl text-center">
-                  <p className="text-[#181A1F]/50 font-bold text-sm mb-3">你还没有生成游戏基因</p>
-                  <Button variant="kook-brand" size="sm" onClick={() => router.push('/personality')}>去测评</Button>
-                </div>
+                <EmptyStateCard
+                  scenario="missing-profile"
+                  icon="🧬"
+                  className="p-5"
+                  actionLabel="去测评"
+                  onAction={() => router.push('/personality')}
+                />
               )}
             </div>
 
@@ -235,7 +365,7 @@ export default function ProfilePage() {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 {user?.badges?.map((badgeId) => {
-                  const badge = allBadgesDict[badgeId];
+                  const badge = badgeCatalogById[badgeId];
                   if (!badge) return null;
                   return (
                     <div key={badgeId} className="aspect-square bg-gradient-to-b from-white to-[#F7F9FC] rounded-2xl border border-[#181A1F]/10 flex items-center justify-center p-3 relative group shadow-sm hover:shadow-md transition-shadow">
@@ -251,15 +381,25 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
+              {!user?.avatarUrl && !avatar && (
+                <div className="mt-4">
+                  <EmptyStateCard
+                    scenario="missing-avatar"
+                    icon="🖼️"
+                    className="p-4"
+                    onAction={() => setIsEditProfileOpen(true)}
+                  />
+                </div>
+              )}
             </div>
           </motion.div>
 
-          {/* Middle Column - Game Career / 生涯数据 & Vlog (Span 6) */}
+          {/* Middle Column - Game Career / 生涯数据 & Vlog */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="space-y-6 lg:col-span-6 flex flex-col"
+            className="min-w-0 space-y-6 self-start"
           >
             {/* 游戏生涯 */}
             <div className="glass-panel p-6 bg-white/70">
@@ -273,30 +413,65 @@ export default function ProfilePage() {
               <div className="space-y-5">
                 {user?.careers && user.careers.length > 0 ? (
                   user.careers.map((career: Career) => (
-                    <div key={career.id} className="bg-white rounded-xl p-4 border border-[#181A1F]/5 shadow-sm">
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-[#181A1F] font-bold">{career.gameName}</span>
-                        <span className="text-kook-brand font-black">{career.hours} 小时</span>
-                      </div>
-                      <div className="w-full h-2 bg-[#181A1F]/5 rounded-full overflow-hidden">
-                        <div className="h-full bg-kook-brand w-[85%] rounded-full shadow-[0_0_10px_rgba(46,211,158,0.5)]"></div>
-                      </div>
-                      <div className="mt-3 text-xs font-bold text-[#181A1F]/60 flex gap-3">
-                        <span className="bg-[#181A1F]/5 border border-[#181A1F]/10 px-2 py-0.5 rounded">{career.rank}</span>
+                    <div
+                      key={career.id}
+                      className="overflow-hidden rounded-2xl border border-[#181A1F]/6 bg-white shadow-sm"
+                    >
+                      <div className="flex flex-col gap-5 p-5 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <div className="text-lg font-black text-[#181A1F]">
+                            {career.gameName}
+                          </div>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <span className="rounded-full border border-[#181A1F]/10 bg-[#F7F9FC] px-3 py-1 text-xs font-bold text-[#5C6068]">
+                              段位 · {career.rank}
+                            </span>
+                            <span className="rounded-full border border-kook-brand/20 bg-kook-brand/8 px-3 py-1 text-xs font-bold text-kook-brand">
+                              已录入
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid min-w-[220px] grid-cols-2 gap-3">
+                          <div className="rounded-2xl border border-[#181A1F]/8 bg-[#F7F9FC] px-4 py-4">
+                            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#8D93A5]">
+                              累计时长
+                            </div>
+                            <div className="mt-2 text-2xl font-black text-kook-brand">
+                              {career.hours}
+                            </div>
+                            <div className="mt-1 text-xs font-medium text-[#8D93A5]">
+                              小时
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-[#181A1F]/8 bg-white px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-[#8D93A5]">
+                              当前标签
+                            </div>
+                            <div className="mt-2 text-base font-black text-[#181A1F]">
+                              {career.rank}
+                            </div>
+                            <div className="mt-1 text-xs font-medium text-[#8D93A5]">
+                              生涯档案
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="p-5 bg-[#181A1F]/5 border border-[#181A1F]/10 rounded-2xl text-center">
-                    <p className="text-[#181A1F]/50 font-bold text-sm mb-3">暂无游戏生涯记录</p>
-                    <Button variant="outline" size="sm" onClick={() => setIsAddCareerOpen(true)}>添加第一条记录</Button>
-                  </div>
+                  <EmptyStateCard
+                    scenario="no-careers"
+                    icon="🎮"
+                    className="p-5"
+                    onAction={() => setIsAddCareerOpen(true)}
+                  />
                 )}
               </div>
             </div>
 
             {/* 游戏 Vlog */}
-            <div className="glass-panel p-6 bg-white/70 flex-1">
+            <div className="glass-panel bg-white/70 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-black text-[#181A1F] flex items-center gap-2">
                   <Video size={20} className="text-[#E84393]" /> 游戏 Vlog
@@ -341,25 +516,31 @@ export default function ProfilePage() {
                     </div>
                   ))
                 ) : (
-                  <div className="col-span-full p-5 bg-[#181A1F]/5 border border-[#181A1F]/10 rounded-2xl text-center h-36 flex flex-col items-center justify-center">
-                    <p className="text-[#181A1F]/50 font-bold text-sm mb-3">暂无游戏 Vlog 或日志</p>
-                    <Button variant="outline" size="sm" onClick={() => setIsPublishVlogOpen(true)}>发布第一条记录</Button>
+                  <div className="col-span-full">
+                    <EmptyStateCard
+                      scenario="no-vlogs"
+                      icon="📼"
+                      className="flex min-h-[260px] flex-col justify-center"
+                      onAction={() => setIsPublishVlogOpen(true)}
+                    />
                   </div>
                 )}
               </div>
             </div>
           </motion.div>
 
-          {/* Right Column - Friend Sidebar (Span 3) */}
+          {/* Right Column - Friend Sidebar */}
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.4 }}
-            className="lg:col-span-3 flex flex-col"
+            className="self-start lg:col-span-2 xl:col-span-1"
           >
-            {/* 好友侧边栏 */}
-            <div className="flex-1 min-h-[500px]">
-              <FriendSidebar onOpenChat={(friend) => setActiveChatFriend(friend)} />
+            <div className="xl:sticky xl:top-24">
+              <FriendSidebar
+                activePeerId={activeChatFriend?.peerId}
+                onOpenChat={(friend) => setActiveChatFriend(friend)}
+              />
             </div>
           </motion.div>
           
@@ -412,6 +593,7 @@ export default function ProfilePage() {
       {activeChatFriend && (
         <PrivateChat 
           friend={activeChatFriend} 
+          currentUserId={user?.id}
           onClose={() => setActiveChatFriend(null)} 
         />
       )}

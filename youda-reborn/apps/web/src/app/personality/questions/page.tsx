@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Question, ScoreKey, questions } from "@youda/game-assets";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,6 +29,15 @@ export default function QuestionsPage() {
     };
   }, []);
 
+  const handleSubmit = useCallback(async (finalScores: Partial<Record<ScoreKey, number>>) => {
+    try {
+      localStorage.setItem('personalityScores', JSON.stringify(finalScores));
+      router.push('/personality/result');
+    } catch (error) {
+      console.error(error);
+    }
+  }, [router]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
@@ -41,12 +50,11 @@ export default function QuestionsPage() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [scores]);
+  }, [handleSubmit, scores]);
 
   const currentQuestion = selectedQuestions[currentIndex];
 
   const handleOptionSelect = (optionScores: Partial<Record<ScoreKey, number>>) => {
-    // 记录历史用于回退
     setScoreHistory(prev => [...prev, { ...scores }]);
     
     const newScores = { ...scores };
@@ -65,19 +73,9 @@ export default function QuestionsPage() {
   const handleBack = () => {
     if (currentIndex > 0) {
       setCurrentIndex((prev) => prev - 1);
-      // 恢复上一步的分数
       const previousScores = scoreHistory[scoreHistory.length - 1];
       setScores(previousScores);
       setScoreHistory(prev => prev.slice(0, -1));
-    }
-  };
-
-  const handleSubmit = async (finalScores: Partial<Record<ScoreKey, number>>) => {
-    try {
-      localStorage.setItem('personalityScores', JSON.stringify(finalScores));
-      router.push('/personality/result');
-    } catch (error) {
-      console.error(error);
     }
   };
 

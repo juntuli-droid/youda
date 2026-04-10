@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+env:
+  APP_ENV: production
+  APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+  REDIS_URL: ${{ secrets.REDIS_URL }}
+  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+  SENDGRID_FROM_EMAIL: ${{ secrets.SENDGRID_FROM_EMAIL }}
+  SENDGRID_PASSWORD_RESET_TEMPLATE_ID: ${{ secrets.SENDGRID_PASSWORD_RESET_TEMPLATE_ID }}
+  SENDGRID_SUSPICIOUS_LOGIN_TEMPLATE_ID: ${{ secrets.SENDGRID_SUSPICIOUS_LOGIN_TEMPLATE_ID }}
+  SENDGRID_LOGIN_CHALLENGE_TEMPLATE_ID: ${{ secrets.SENDGRID_LOGIN_CHALLENGE_TEMPLATE_ID }}
+  SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+  NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+  SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+  SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @youda/database generate
+
+      - name: Lint web app
+        run: pnpm --filter web lint
+
+      - name: Run auth test suite with coverage
+        run: pnpm --filter web test:coverage
+
+      - name: Build web app
+        run: pnpm --filter web build
+
+      - name: Build Nest companion API
+        run: pnpm --filter api build
+
+      - name: Run API tests
+        run: pnpm --filter api test

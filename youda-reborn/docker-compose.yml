@@ -15,6 +15,15 @@ services:
     volumes:
       - db_data:/var/lib/mysql
 
+  redis:
+    image: redis:7-alpine
+    container_name: youda_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   web:
     build:
       context: .
@@ -23,8 +32,19 @@ services:
       - "3000:3000"
     depends_on:
       - db
+      - redis
     environment:
       - DATABASE_URL=mysql://youda_user:youdapassword@db:3306/youda_db
+      - REDIS_URL=redis://redis:6379
+      - APP_ENV=production
+      - APP_BASE_URL=http://localhost:3000
+      - JWT_SECRET=replace-with-a-32-char-secret-value
+      - JWT_REFRESH_SECRET=replace-with-a-second-32-char-secret
+      - SENDGRID_API_KEY=replace-with-sendgrid-key
+      - SENDGRID_FROM_EMAIL=noreply@example.com
+      - SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+      - NEXT_PUBLIC_SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
 
 volumes:
   db_data:
+  redis_data:

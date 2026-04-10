@@ -2,12 +2,19 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { calculatePersonality, resolveAvatar, PersonalityResult, getPersonalityMeta } from "@youda/game-assets";
+import {
+  calculateMbtiProfile,
+  calculatePersonality,
+  PersonalityResult,
+  getPersonalityMeta,
+  resolveAvatar
+} from "@youda/game-assets";
 import { Button } from "@/components/ui/Button";
 import { motion } from "framer-motion";
 import { RefreshCw, Home, Download } from "lucide-react";
 import confetti from "canvas-confetti";
 import html2canvas from "html2canvas";
+import { writeStoredMbtiProfile } from "@/lib/mbti-storage";
 
 export default function ResultPage() {
   const router = useRouter();
@@ -32,12 +39,25 @@ export default function ResultPage() {
       if (storedScores) {
         const scores = JSON.parse(storedScores);
         const calcResult = calculatePersonality(scores);
+        const mbti = calculateMbtiProfile(scores);
         setResult(calcResult);
+        writeStoredMbtiProfile(mbti);
         
         const meta = getPersonalityMeta(calcResult.code);
         setResultMeta(meta);
         setCharacterName(meta.character);
-        setAvatarUrl(resolveAvatar(calcResult.code));
+        const resolvedAvatarUrl = resolveAvatar(calcResult.code)
+        setAvatarUrl(resolvedAvatarUrl);
+        void fetch('/api/users/me/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            avatarUrl: resolvedAvatarUrl,
+            personalityCode: calcResult.code
+          })
+        }).catch(() => undefined)
         
         // 触发胜利粒子特效
         triggerConfetti();
@@ -159,12 +179,11 @@ export default function ResultPage() {
         </motion.div>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {[
             { label: "游戏风格", value: resultMeta?.name?.split('·')[0] || "战术型" },
             { label: "游戏性格", value: resultMeta?.name?.split('·')[1] || "稳健型" },
             { label: "游戏偏好", value: "目标推进偏好" },
-            { label: "活跃标签", value: "高频玩家" },
           ].map((item, i) => (
             <motion.div 
               key={i}

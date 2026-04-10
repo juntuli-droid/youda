@@ -6,6 +6,8 @@ import { access } from "node:fs/promises"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const root = path.resolve(__dirname, "..")
+const workspaceRoot = path.resolve(root, "../..")
+const publicAssetsRoot = path.join(workspaceRoot, "apps/web/public/game-assets")
 
 async function exists(filePath) {
   try {
@@ -26,22 +28,44 @@ async function main() {
   const avatars = await readJson("avatars/manifest.json")
   const badges = await readJson("badges/manifest.json")
   const version = await readJson("VERSION.json")
+  const publicAvatars = JSON.parse(
+    await readFile(path.join(publicAssetsRoot, "avatars/manifest.json"), "utf8")
+  )
+  const publicBadges = JSON.parse(
+    await readFile(path.join(publicAssetsRoot, "badges/manifest.json"), "utf8")
+  )
 
   if (avatars.total !== 27) {
     throw new Error(`avatars.total=${avatars.total}，预期为27`)
   }
 
+  if (JSON.stringify(avatars) !== JSON.stringify(publicAvatars)) {
+    throw new Error("avatars manifest 与 apps/web/public 副本不一致")
+  }
+
+  if (JSON.stringify(badges) !== JSON.stringify(publicBadges)) {
+    throw new Error("badges manifest 与 apps/web/public 副本不一致")
+  }
+
   for (const item of avatars.items) {
-    const displayOk = await exists(path.join(root, item.display.file))
-    const avatarOk = await exists(path.join(root, item.avatar.file))
+    const displayOk =
+      (await exists(path.join(root, item.display.file))) ||
+      (await exists(path.join(publicAssetsRoot, item.display.file.replace(/^avatars\//, "avatars/"))))
+    const avatarOk =
+      (await exists(path.join(root, item.avatar.file))) ||
+      (await exists(path.join(publicAssetsRoot, item.avatar.file.replace(/^avatars\//, "avatars/"))))
     if (!displayOk || !avatarOk) {
       throw new Error(`角色资源缺失: ${item.id} ${item.character}`)
     }
   }
 
   for (const item of badges.items) {
-    const activeOk = await exists(path.join(root, item.active.file))
-    const inactiveOk = await exists(path.join(root, item.inactive.file))
+    const activeOk =
+      (await exists(path.join(root, item.active.file))) ||
+      (await exists(path.join(publicAssetsRoot, item.active.file)))
+    const inactiveOk =
+      (await exists(path.join(root, item.inactive.file))) ||
+      (await exists(path.join(publicAssetsRoot, item.inactive.file)))
     if (!activeOk || !inactiveOk) {
       throw new Error(`徽章资源缺失: ${item.id} ${item.name}`)
     }

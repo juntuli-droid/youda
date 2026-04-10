@@ -25,19 +25,19 @@ export default function PersonalityPage() {
           <div className="relative z-10">
             <div className="text-sm font-bold text-kook-brand mb-2">开始测试</div>
             <h1 className="text-3xl md:text-4xl font-bold mb-4 text-kook-textMain tracking-tight">
-              构建你的游戏人格
+              构建你的 MBTI 游戏人格
             </h1>
             <p className="text-kook-textMuted text-base mb-8">
-              用 16 道轻量问题，快速判断你的节奏、偏好和协作方式。
+              用 16 道行为题快速识别你的 MBTI 倾向，并同步生成更贴近游戏场景的人格画像。
             </p>
             
             <div className="bg-[#F7F8FA] border border-kook-border rounded-kook-lg p-6 mb-6">
-              <h4 className="text-kook-textMain font-medium text-sm mb-4">人格编码说明</h4>
-              <p className="text-kook-textMain font-bold text-base mb-3">两位主编码 + 一位活跃标签</p>
+              <h4 className="text-kook-textMain font-medium text-sm mb-4">输出说明</h4>
+              <p className="text-kook-textMain font-bold text-base mb-3">MBTI 16 型 + 游戏人格编码</p>
               <div className="space-y-2 text-kook-textMuted text-sm">
-                <p>第一位：游戏风格 A 主动进攻型 · B 稳健平衡型 · S 沟通协作型</p>
-                <p>第二位：游戏偏好 C 竞技对抗型 · T 团队合作型 · E 探索体验型</p>
-                <p>活跃标签 F 高频玩家 · L 轻量玩家</p>
+                <p>MBTI：根据行为题映射 E/I、S/N、T/F、J/P 四个维度，生成适合开黑场景的 16 型结果。</p>
+                <p>游戏人格：继续保留你在节奏、偏好和活跃频率上的画像，方便做更细的游戏匹配。</p>
+                <p>匹配阶段会优先参考 MBTI 兼容度，再综合地区、兴趣和时间偏好。</p>
               </div>
             </div>
 
@@ -48,7 +48,7 @@ export default function PersonalityPage() {
               </div>
               <div className="bg-[#F7F8FA] border border-kook-border rounded-kook-lg p-5">
                 <div className="text-kook-textMuted text-xs mb-1">输出结果</div>
-                <div className="text-kook-textMain font-bold text-xl">人格编码</div>
+                <div className="text-kook-textMain font-bold text-xl">MBTI + 人格画像</div>
               </div>
             </div>
 

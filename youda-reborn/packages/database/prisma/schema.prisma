@@ -1,116 +1,472 @@
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum MatchStatus {
+  PENDING
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum VlogType {
+  VIDEO
+  LOG
+}
+
+enum MessageType {
+  DIRECT
+  MATCH
+  SYSTEM
+}
+
+enum MessageContentType {
+  TEXT
+  IMAGE
+  VOICE
+}
+
+enum ReportCategory {
+  SEXUAL
+  HARASSMENT
+  FRAUD
+  INFRINGEMENT
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  ACTIONED
+  REJECTED
+}
+
+enum MatchQueueStatus {
+  QUEUED
+  MATCHED
+  CANCELLED
+  EXPIRED
+}
+
+enum VoiceSignalType {
+  JOIN
+  OFFER
+  ANSWER
+  ICE
+  LEAVE
+}
+
+enum AuditEventType {
+  FRIEND_REQUESTED
+  FRIEND_ACCEPTED
+  FRIEND_REMOVED
+  MESSAGE_SENT
+  MESSAGE_READ
+  MESSAGE_RECALLED
+  USER_BLOCKED
+  USER_UNBLOCKED
+  USER_REPORTED
+  MATCH_ENQUEUED
+  MATCH_FOUND
+  MATCH_CANCELLED
+  EMPTY_STATE_EXPOSED
+  EMPTY_STATE_CLICKED
+}
+
 model User {
-  id             String   @id @default(uuid())
-  phoneNumber    String?  @unique
-  wechatOpenId   String?  @unique
-  demoSessionId  String?  @unique
-  passwordHash   String?
-  nickname       String
-  avatarUrl      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String               @id @default(cuid()) @db.VarChar(191)
+  username           String               @unique @db.VarChar(191)
+  email              String               @unique @db.VarChar(191)
+  publicId           String               @unique @db.VarChar(32)
+  passwordHash       String               @db.VarChar(255)
+  nickname           String?              @db.VarChar(191)
+  avatarUrl          String?              @db.VarChar(512)
+  personalityCode    String?              @db.VarChar(32)
+  badges             Json?
+  unlockedBadges     Json?
+  lastLoginAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  careers            Career[]
+  vlogs              Vlog[]
+  hostedMatches      Match[]              @relation("HostedMatches")
+  sentFriendships    Friend[]             @relation("FriendRequester")
+  receivedFriendships Friend[]            @relation("FriendAddressee")
+  sentMessages       ChatMessage[]        @relation("SentMessages")
+  receivedMessages   ChatMessage[]        @relation("ReceivedMessages")
+  messageReceipts    ChatMessageReceipt[]
+  blockedUsers       BlockRelation[]      @relation("BlockerUser")
+  blockedByUsers     BlockRelation[]      @relation("BlockedUser")
+  filedReports       UserReport[]         @relation("ReportReporter")
+  receivedReports    UserReport[]         @relation("ReportTarget")
+  matchQueueEntries  MatchQueueEntry[]    @relation("QueuedMatches")
+  matchedQueueEntries MatchQueueEntry[]   @relation("MatchedQueueOpponent")
+  sentMatchLogs      MatchLog[]           @relation("MatchLogSender")
+  receivedMatchLogs  MatchLog[]           @relation("MatchLogReceiver")
+  actorAuditEvents   AuditEvent[]         @relation("AuditActor")
+  targetAuditEvents  AuditEvent[]         @relation("AuditTarget")
+  refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  loginSessions      LoginSession[]
+  loginChallengeTokens LoginChallengeToken[]
+  voiceParticipants  VoiceRoomParticipant[]
+  sentVoiceSignals   VoiceRoomSignal[]      @relation("VoiceSignalSender")
+  receivedVoiceSignals VoiceRoomSignal[]    @relation("VoiceSignalTarget")
 
-  userResults    UserResult[]
-  logs           Log[]
-
-  @@map("user")
+  @@index([publicId])
+  @@index([createdAt])
+  @@map("users")
 }
 
-model Question {
-  id          String   @id @default(uuid())
-  content     String   @db.Text
-  dimensionId String
-  order       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Friend {
+  id                     String       @id @default(cuid()) @db.VarChar(191)
+  userId                 String       @db.VarChar(191)
+  friendId               String       @db.VarChar(191)
+  status                 FriendStatus @default(PENDING)
+  messageRetentionPolicy String       @default("PRESERVE") @db.VarChar(32)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  user                   User         @relation("FriendRequester", fields: [userId], references: [id], onDelete: Cascade)
+  friend                 User         @relation("FriendAddressee", fields: [friendId], references: [id], onDelete: Cascade)
 
-  dimension   Dimension @relation(fields: [dimensionId], references: [id])
-  options     Option[]
-
-  @@map("question")
+  @@unique([userId, friendId])
+  @@index([userId, status, createdAt])
+  @@index([friendId, status, createdAt])
+  @@map("friends")
 }
 
-model Option {
-  id          String   @id @default(uuid())
-  questionId  String
-  content     String   @db.Text
-  score       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Match {
+  id         String      @id @default(cuid()) @db.VarChar(191)
+  hostUserId String      @db.VarChar(191)
+  gameName   String      @db.VarChar(191)
+  personality String?    @db.VarChar(64)
+  duration   String?     @db.VarChar(64)
+  roomCode   String?     @unique @db.VarChar(64)
+  status     MatchStatus @default(PENDING)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  hostUser   User        @relation("HostedMatches", fields: [hostUserId], references: [id], onDelete: Cascade)
+  messages   ChatMessage[] @relation("MatchMessages")
+  reports    UserReport[]
+  queueEntries MatchQueueEntry[]
+  voiceParticipants VoiceRoomParticipant[]
+  voiceSignals VoiceRoomSignal[]
 
-  question    Question @relation(fields: [questionId], references: [id])
-
-  @@map("option")
+  @@index([hostUserId, createdAt])
+  @@index([status, createdAt])
+  @@map("matches")
 }
 
-model Dimension {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?  @db.Text
-  weight      Float    @default(1.0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model VoiceRoomParticipant {
+  id                String   @id @default(cuid()) @db.VarChar(191)
+  matchId           String   @db.VarChar(191)
+  userId            String   @db.VarChar(191)
+  peerId            String   @unique @db.VarChar(191)
+  ipAddress         String?  @db.VarChar(64)
+  userAgent         String?  @db.VarChar(512)
+  deviceFingerprint String?  @db.VarChar(191)
+  metadata          Json?
+  joinedAt          DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  leftAt            DateTime?
+  match             Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  questions   Question[]
-
-  @@map("dimension")
+  @@unique([matchId, userId])
+  @@index([matchId, lastSeenAt])
+  @@index([matchId, leftAt, lastSeenAt])
+  @@map("voice_room_participants")
 }
 
-model Result {
-  id          String   @id @default(uuid())
-  typeCode    String   @unique // e.g. INTJ, ENFP
-  name        String
-  description String   @db.Text
-  avatarUrl   String?
-  posterUrl   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model VoiceRoomSignal {
+  id           String          @id @default(cuid()) @db.VarChar(191)
+  matchId      String          @db.VarChar(191)
+  senderId     String          @db.VarChar(191)
+  senderPeerId String          @db.VarChar(191)
+  targetUserId String?         @db.VarChar(191)
+  targetPeerId String?         @db.VarChar(191)
+  signalType   VoiceSignalType
+  payload      Json?
+  expiresAt    DateTime
+  createdAt    DateTime        @default(now())
+  match        Match           @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender       User            @relation("VoiceSignalSender", fields: [senderId], references: [id], onDelete: Cascade)
+  targetUser   User?           @relation("VoiceSignalTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
 
-  userResults UserResult[]
-
-  @@map("result")
+  @@index([matchId, createdAt])
+  @@index([matchId, targetPeerId, createdAt])
+  @@index([matchId, expiresAt])
+  @@map("voice_room_signals")
 }
 
-model UserResult {
-  id          String   @id @default(uuid())
-  userId      String
-  resultId    String
-  scores      Json     // Detailed dimension scores
-  completedAt DateTime @default(now())
+model ChatMessage {
+  id         String       @id @default(cuid()) @db.VarChar(191)
+  matchId    String?      @db.VarChar(191)
+  senderId   String       @db.VarChar(191)
+  receiverId String?      @db.VarChar(191)
+  clientMessageId String? @unique @db.VarChar(191)
+  content    String       @db.Text
+  messageType MessageType @default(DIRECT)
+  contentType MessageContentType @default(TEXT)
+  attachmentUrl String?   @db.VarChar(512)
+  attachmentMeta Json?
+  recalledAt DateTime?
+  recallReason String?    @db.VarChar(255)
+  createdAt  DateTime     @default(now())
+  match      Match?       @relation("MatchMessages", fields: [matchId], references: [id], onDelete: SetNull)
+  sender     User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User?        @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: SetNull)
+  receipts   ChatMessageReceipt[]
+  reports    UserReport[]
 
-  user        User     @relation(fields: [userId], references: [id])
-  result      Result   @relation(fields: [resultId], references: [id])
-
-  @@map("user_result")
+  @@index([senderId, createdAt])
+  @@index([matchId, createdAt])
+  @@index([receiverId, createdAt])
+  @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, recalledAt, createdAt])
+  @@map("chat_messages")
 }
 
-model Admin {
-  id          String   @id @default(uuid())
-  username    String   @unique
-  password    String
-  role        String   @default("ADMIN")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model ChatMessageReceipt {
+  id         String      @id @default(cuid()) @db.VarChar(191)
+  messageId  String      @db.VarChar(191)
+  userId     String      @db.VarChar(191)
+  deliveredAt DateTime?  @default(now())
+  readAt     DateTime?
+  createdAt  DateTime    @default(now())
+  message    ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("admin")
+  @@unique([messageId, userId])
+  @@index([userId, readAt, createdAt])
+  @@map("chat_message_receipts")
 }
 
-model Log {
-  id          String   @id @default(uuid())
-  userId      String?
-  action      String
-  details     Json?
-  createdAt   DateTime @default(now())
+model Vlog {
+  id        String    @id @default(cuid()) @db.VarChar(191)
+  userId    String    @db.VarChar(191)
+  title     String    @db.VarChar(191)
+  gameName  String    @db.VarChar(191)
+  videoUrl  String?   @db.VarChar(512)
+  coverUrl  String?   @db.VarChar(512)
+  content   String?   @db.Text
+  type      VlogType  @default(VIDEO)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user        User?    @relation(fields: [userId], references: [id])
+  @@index([userId, createdAt])
+  @@index([gameName, createdAt])
+  @@map("vlogs")
+}
 
-  @@map("log")
+model Career {
+  id        String    @id @default(cuid()) @db.VarChar(191)
+  userId    String    @db.VarChar(191)
+  gameName  String    @db.VarChar(191)
+  hours     Int       @default(0)
+  rank      String    @db.VarChar(191)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([gameName, createdAt])
+  @@map("careers")
+}
+
+model RefreshToken {
+  id                String    @id @default(cuid()) @db.VarChar(191)
+  userId            String    @db.VarChar(191)
+  tokenHash         String    @unique @db.VarChar(191)
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  lastUsedAt        DateTime?
+  ipAddress         String?   @db.VarChar(64)
+  userAgent         String?   @db.VarChar(512)
+  deviceFingerprint String?   @db.VarChar(191)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loginSessions     LoginSession[]
+
+  @@index([userId, expiresAt])
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid()) @db.VarChar(191)
+  userId     String    @db.VarChar(191)
+  tokenHash  String    @unique @db.VarChar(191)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model LoginSession {
+  id                String        @id @default(cuid()) @db.VarChar(191)
+  userId            String        @db.VarChar(191)
+  refreshTokenId    String?       @db.VarChar(191)
+  ipAddress         String?       @db.VarChar(64)
+  userAgent         String?       @db.VarChar(512)
+  deviceFingerprint String        @db.VarChar(191)
+  verificationState String        @default("TRUSTED") @db.VarChar(32)
+  verifiedAt        DateTime?
+  revokedAt         DateTime?
+  lastSeenAt        DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken      RefreshToken? @relation(fields: [refreshTokenId], references: [id], onDelete: SetNull)
+  challengeTokens   LoginChallengeToken[]
+
+  @@index([userId, createdAt])
+  @@index([userId, deviceFingerprint])
+  @@map("login_sessions")
+}
+
+model LoginChallengeToken {
+  id             String       @id @default(cuid()) @db.VarChar(191)
+  userId         String       @db.VarChar(191)
+  loginSessionId String?      @db.VarChar(191)
+  tokenHash      String       @unique @db.VarChar(191)
+  ipAddress      String?      @db.VarChar(64)
+  userAgent      String?      @db.VarChar(512)
+  deviceFingerprint String?   @db.VarChar(191)
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loginSession   LoginSession? @relation(fields: [loginSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, expiresAt])
+  @@index([loginSessionId, expiresAt])
+  @@map("login_challenge_tokens")
+}
+
+model BlockRelation {
+  id         String   @id @default(cuid()) @db.VarChar(191)
+  blockerId  String   @db.VarChar(191)
+  blockedId  String   @db.VarChar(191)
+  reason     String?  @db.VarChar(255)
+  createdAt  DateTime @default(now())
+  blocker    User     @relation("BlockerUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked    User     @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId, createdAt])
+  @@index([blockedId, createdAt])
+  @@map("block_relations")
+}
+
+model UserReport {
+  id             String         @id @default(cuid()) @db.VarChar(191)
+  reporterId     String         @db.VarChar(191)
+  reportedUserId String?        @db.VarChar(191)
+  messageId      String?        @db.VarChar(191)
+  matchId        String?        @db.VarChar(191)
+  category       ReportCategory
+  description    String?        @db.Text
+  evidenceUrls   Json?
+  status         ReportStatus   @default(PENDING)
+  reviewerNote   String?        @db.Text
+  callbackSentAt DateTime?
+  reviewedAt     DateTime?
+  ipAddress      String?        @db.VarChar(64)
+  deviceFingerprint String?     @db.VarChar(191)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  reporter       User           @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser   User?          @relation("ReportTarget", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  message        ChatMessage?   @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  match          Match?         @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  @@index([reporterId, createdAt])
+  @@index([reportedUserId, createdAt])
+  @@index([status, createdAt])
+  @@map("user_reports")
+}
+
+model MatchQueueEntry {
+  id             String           @id @default(cuid()) @db.VarChar(191)
+  userId         String           @db.VarChar(191)
+  matchId        String?          @db.VarChar(191)
+  matchedUserId  String?          @db.VarChar(191)
+  dedupeKey      String           @unique @db.VarChar(191)
+  gameName       String           @db.VarChar(191)
+  gender         String?          @db.VarChar(32)
+  ageMin         Int?
+  ageMax         Int?
+  interests      Json?
+  region         String?          @db.VarChar(64)
+  latitude       Float?
+  longitude      Float?
+  priorityScore  Int              @default(0)
+  status         MatchQueueStatus @default(QUEUED)
+  expiresAt      DateTime
+  matchedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation("QueuedMatches", fields: [userId], references: [id], onDelete: Cascade)
+  match          Match?           @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  matchedUser    User?            @relation("MatchedQueueOpponent", fields: [matchedUserId], references: [id], onDelete: SetNull)
+  matchLogs      MatchLog[]
+
+  @@index([userId, status, createdAt])
+  @@index([gameName, status, priorityScore, createdAt])
+  @@index([status, expiresAt])
+  @@map("match_queue_entries")
+}
+
+model MatchLog {
+  id           String          @id @default(cuid()) @db.VarChar(191)
+  queueEntryId String?         @db.VarChar(191)
+  userId       String          @db.VarChar(191)
+  matchedUserId String         @db.VarChar(191)
+  gameName     String          @db.VarChar(191)
+  score        Float
+  filters      Json?
+  createdAt    DateTime        @default(now())
+  queueEntry   MatchQueueEntry? @relation(fields: [queueEntryId], references: [id], onDelete: SetNull)
+  user         User            @relation("MatchLogSender", fields: [userId], references: [id], onDelete: Cascade)
+  matchedUser  User            @relation("MatchLogReceiver", fields: [matchedUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([matchedUserId, createdAt])
+  @@map("match_logs")
+}
+
+model AuditEvent {
+  id               String         @id @default(cuid()) @db.VarChar(191)
+  actorUserId      String?        @db.VarChar(191)
+  targetUserId     String?        @db.VarChar(191)
+  eventType        AuditEventType
+  ipAddress        String?        @db.VarChar(64)
+  deviceFingerprint String?       @db.VarChar(191)
+  payload          Json?
+  createdAt        DateTime       @default(now())
+  actorUser        User?          @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser       User?          @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("audit_events")
 }

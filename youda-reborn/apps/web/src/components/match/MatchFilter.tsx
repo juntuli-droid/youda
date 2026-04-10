@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
+import { MatchFilters } from '@/components/match/types';
+import { readStoredMbtiProfile } from '@/lib/mbti-storage';
 
 const GAMES = [
   "英雄联盟", "无畏契约", "绝地求生", "Apex 英雄", "守望先锋", 
@@ -17,19 +19,29 @@ const DURATIONS = ["10分钟内 (极速)", "10-30分钟 (标准)", "30分钟以�
 const LANGUAGES = ["中文 (普通话)", "英语", "日语", "韩语", "不限"];
 const REGIONS = ["国服", "亚服", "美服", "欧服", "不限"];
 const PERSONALITIES = ["不限 (匹配最优解)", "稳健平衡型 (B类)", "主动进攻型 (A类)", "沟通协作型 (S类)", "战术指挥型 (T类)"];
+const GENDERS = ['不限', '男', '女', '非二元'];
+const AGE_RANGES = ['不限', '18-22', '23-27', '28-35', '35+'];
 
 interface MatchFilterProps {
-  onStartMatch: (filters: Record<string, string>) => void;
+  onStartMatch: (filters: MatchFilters) => void;
+  onEnterTestRoom: (filters: MatchFilters) => void;
 }
 
-export default function MatchFilter({ onStartMatch }: MatchFilterProps) {
-  const [filters, setFilters] = useState({
+type EditableFilterKey = Exclude<keyof MatchFilters, 'interests'>
+
+export default function MatchFilter({ onStartMatch, onEnterTestRoom }: MatchFilterProps) {
+  const [filters, setFilters] = useState<MatchFilters>({
     game: GAMES[0],
     personality: PERSONALITIES[0],
     size: MATCH_SIZES[0],
     duration: DURATIONS[1],
     language: LANGUAGES[0],
     region: REGIONS[0],
+    gender: GENDERS[0],
+    ageRange: AGE_RANGES[0],
+    interests: [GAMES[0], PERSONALITIES[0], LANGUAGES[0]],
+    mbtiType: undefined,
+    mbtiTitle: undefined
   });
   const [playerCount, setPlayerCount] = useState<number | null>(null);
 
@@ -37,8 +49,25 @@ export default function MatchFilter({ onStartMatch }: MatchFilterProps) {
     setPlayerCount(Math.floor(Math.random() * 2000 + 500));
   }, []);
 
-  const handleChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    const storedMbti = readStoredMbtiProfile()
+    if (!storedMbti) {
+      return
+    }
+
+    setFilters((previous) => ({
+      ...previous,
+      mbtiType: storedMbti.type,
+      mbtiTitle: storedMbti.title
+    }))
+  }, [])
+
+  const handleChange = (key: EditableFilterKey, value: string) => {
+    setFilters(prev => {
+      const next = { ...prev, [key]: value };
+      next.interests = Array.from(new Set([next.game, next.personality, next.language]));
+      return next;
+    });
   };
 
   return (
@@ -144,6 +173,34 @@ export default function MatchFilter({ onStartMatch }: MatchFilterProps) {
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-kook-textMuted pointer-events-none">▼</div>
             </div>
           </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-kook-textMain block">性别偏好</label>
+            <div className="relative">
+              <select
+                value={filters.gender}
+                onChange={(e) => handleChange('gender', e.target.value)}
+                className="w-full bg-[#F2F3F5] border border-transparent rounded-kook-md px-4 py-3 text-kook-textMain focus:outline-none focus:border-kook-brand focus:bg-white transition-colors appearance-none font-medium cursor-pointer"
+              >
+                {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-kook-textMuted pointer-events-none">▼</div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-kook-textMain block">年龄偏好</label>
+            <div className="relative">
+              <select
+                value={filters.ageRange}
+                onChange={(e) => handleChange('ageRange', e.target.value)}
+                className="w-full bg-[#F2F3F5] border border-transparent rounded-kook-md px-4 py-3 text-kook-textMain focus:outline-none focus:border-kook-brand focus:bg-white transition-colors appearance-none font-medium cursor-pointer"
+              >
+                {AGE_RANGES.map(range => <option key={range} value={range}>{range}</option>)}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-kook-textMuted pointer-events-none">▼</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -158,14 +215,44 @@ export default function MatchFilter({ onStartMatch }: MatchFilterProps) {
             <span className="text-kook-textMuted text-sm ml-2 font-medium">当前有 {playerCount.toLocaleString()} 名玩家正在寻找队伍</span>
           )}
         </div>
-        <Button 
-          variant="kook-brand" 
-          size="lg" 
-          className="w-full md:w-auto px-10 font-bold shadow-[0_4px_14px_rgba(46,211,158,0.25)] hover:-translate-y-0.5"
-          onClick={() => onStartMatch(filters)}
-        >
-          开始匹配
-        </Button>
+        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
+          <Button 
+            variant="kook-brand" 
+            size="lg" 
+            className="w-full md:w-auto px-10 font-bold shadow-[0_4px_14px_rgba(46,211,158,0.25)] hover:-translate-y-0.5"
+            onClick={() => onStartMatch(filters)}
+          >
+            开始匹配
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full md:w-auto px-8 font-bold border-[#5C6BFF]/25 bg-[#5C6BFF]/5 text-[#4251E8] hover:bg-[#5C6BFF]/10"
+            onClick={() => onEnterTestRoom(filters)}
+          >
+            测试直达语音房
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-kook-lg border border-[#E3E5E8] bg-white/80 p-5 shadow-sm">
+        <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-kook-brand">
+          MBTI 智能匹配
+        </div>
+        {filters.mbtiType ? (
+          <div className="flex flex-col gap-1 text-sm">
+            <span className="font-bold text-[#181A1F]">
+              当前识别：{filters.mbtiType} · {filters.mbtiTitle}
+            </span>
+            <span className="text-[#5C6068]">
+              队列会把你的 MBTI 与地区、年龄、兴趣一起纳入兼容度算法。
+            </span>
+          </div>
+        ) : (
+          <div className="text-sm text-[#5C6068]">
+            还没有检测到 MBTI 结果，建议先完成人格测试后再进入精准匹配。
+          </div>
+        )}
       </div>
     </motion.div>
   );

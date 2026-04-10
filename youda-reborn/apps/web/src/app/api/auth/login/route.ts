@@ -3,21 +3,38 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { findUserByEmail, findUserByUsername } from '@/lib/db';
-import { signToken } from '@/lib/auth';
+import { findUserSnapshotByEmail, findUserSnapshotByUsername } from '@/lib/db';
+import { attachSessionCookies } from '@/lib/auth-cookies';
+import { createSessionForUser } from '@/lib/session-service';
+import { enforceRateLimit } from '@/lib/rate-limit';
+import { getRequestIp } from '@/lib/request-meta';
+import { captureRouteException } from '@/lib/monitoring';
 
 export async function POST(request: Request) {
+  let body: { identifier?: string; password?: string } | undefined
+
   try {
-    const { identifier, password } = await request.json();
+    body = await request.json();
+    const { identifier, password } = body ?? {};
+    const ipAddress = getRequestIp(request);
 
     if (!identifier || !password) {
       return NextResponse.json({ error: '请填写账号和密码' }, { status: 400 });
     }
 
-    // Check if identifier is email or username
-    let user = findUserByEmail(identifier);
+    const ipRateLimit = await enforceRateLimit(`login:ip:${ipAddress}`, 10, 60);
+    if (!ipRateLimit.allowed) {
+      return NextResponse.json({ error: '登录过于频繁，请稍后再试' }, { status: 429 });
+    }
+
+    const accountRateLimit = await enforceRateLimit(`login:account:${identifier}`, 10, 60);
+    if (!accountRateLimit.allowed) {
+      return NextResponse.json({ error: '该账号尝试次数过多，请稍后再试' }, { status: 429 });
+    }
+
+    let user = await findUserSnapshotByEmail(identifier);
     if (!user) {
-      user = findUserByUsername(identifier);
+      user = await findUserSnapshotByUsername(identifier);
     }
 
     if (!user) {
@@ -29,25 +46,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '账号或密码错误' }, { status: 401 });
     }
 
-    const token = await signToken({ id: user.id, username: user.username });
+    const session = await createSessionForUser(user, request);
+
+    if (session.suspiciousLogin || !('accessToken' in session) || !('refreshToken' in session)) {
+      return NextResponse.json({
+        error: '检测到新的登录环境，请先前往邮箱完成验证',
+        requiresChallenge: true
+      }, { status: 403 });
+    }
 
     const response = NextResponse.json({
       message: '登录成功',
       user: { id: user.id, username: user.username, email: user.email }
     });
 
-    response.cookies.set('sessionToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7 // 7 days
-    });
-
+    attachSessionCookies(response, session.accessToken, session.refreshToken)
     return response;
   } catch (error) {
-    console.error('Login error:', error);
-    // @ts-expect-error temporary type mismatch
-    return NextResponse.json({ error: '服务器内部错误', details: error?.message || String(error) }, { status: 500 });
+    await captureRouteException(request, error, {
+      event: 'auth.login.failed',
+      requestBody: body
+    })
+
+    return NextResponse.json({ error: '服务器内部错误', details: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

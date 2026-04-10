@@ -6,21 +6,31 @@
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' next dev --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@sendgrid/mail": "^8.1.4",
+    "@sentry/nextjs": "^8.42.0",
+    "@youda/database": "workspace:*",
     "@youda/game-assets": "workspace:*",
     "bcryptjs": "^3.0.3",
     "canvas-confetti": "^1.9.4",
+    "dotenv": "^16.4.7",
+    "dotenv-expand": "^12.0.1",
     "framer-motion": "^12.38.0",
     "html2canvas": "^1.4.1",
+    "ioredis": "^5.4.2",
     "jose": "^6.2.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.577.0",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "ua-parser-js": "^2.0.3",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
@@ -28,10 +38,14 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/ua-parser-js": "^0.7.39",
+    "@vitest/coverage-v8": "^3.2.4",
+    "es-abstract": "1.23.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

@@ -1,16 +1,17 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15-alpine
+  mysql:
+    image: mysql:8.0
     environment:
-      POSTGRES_USER: youda
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: youda_db
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: youda_db
+      MYSQL_USER: youda
+      MYSQL_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
 
   redis:
     image: redis:7-alpine
@@ -19,30 +20,43 @@ services:
     volumes:
       - redisdata:/data
 
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+  coturn:
+    image: coturn/coturn:4.6.2
+    command: ["-c", "/etc/coturn/turnserver.conf"]
     ports:
-      - "3001:3000"
-    environment:
-      - DATABASE_URL=postgresql://youda:password@postgres:5432/youda_db
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - postgres
-      - redis
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "49160-49200:49160-49200/udp"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
 
   web:
     build:
-      context: .
+      context: ../..
       dockerfile: apps/web/Dockerfile
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - APP_ENV=production
+      - APP_BASE_URL=http://localhost:3000
+      - DATABASE_URL=mysql://youda:password@mysql:3306/youda_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=replace-with-a-32-char-secret-value
+      - JWT_REFRESH_SECRET=replace-with-a-second-32-char-secret
+      - SENDGRID_API_KEY=replace-with-sendgrid-key
+      - SENDGRID_FROM_EMAIL=noreply@example.com
+      - SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+      - NEXT_PUBLIC_SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+      - TURN_SHARED_SECRET=replace-with-turn-rest-secret
+      - TURN_UDP_URL=turn:localhost:3478?transport=udp
+      - TURN_TLS_URL=turns:localhost:5349?transport=tcp
+      - TURN_CREDENTIAL_TTL_SECONDS=3600
     depends_on:
-      - api
+      - mysql
+      - redis
+      - coturn
 
 volumes:
-  pgdata:
+  mysqldata:
   redisdata:

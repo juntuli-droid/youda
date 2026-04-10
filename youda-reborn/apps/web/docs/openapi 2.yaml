@@ -1,0 +1,298 @@
+openapi: 3.0.3
+info:
+  title: Youda Web API
+  version: 1.0.0
+  description: 有搭 Web 侧认证、用户资料与内容管理接口文档
+servers:
+  - url: https://youda.example.com
+paths:
+  /api/auth/register:
+    post:
+      summary: 用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  description: 用户登录名，系统内唯一
+                email:
+                  type: string
+                  format: email
+                  description: 用户邮箱，系统内唯一
+                password:
+                  type: string
+                  format: password
+                  description: 用户密码明文，服务端会进行哈希处理
+      responses:
+        '200':
+          description: 注册成功
+  /api/auth/login:
+    post:
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier:
+                  type: string
+                  description: 用户名或邮箱
+                password:
+                  type: string
+                  description: 登录密码
+      responses:
+        '200':
+          description: 登录成功
+  /api/auth/password/forgot:
+    post:
+      summary: 申请找回密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: 接收重置邮件的邮箱地址
+      responses:
+        '200':
+          description: 邮件发送请求已受理
+  /api/auth/password/reset:
+    post:
+      summary: 重置密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:
+                  type: string
+                  description: 15 分钟有效的密码重置令牌
+                password:
+                  type: string
+                  description: 新密码明文
+      responses:
+        '200':
+          description: 密码重置成功
+  /api/auth/me:
+    get:
+      summary: 获取当前登录用户
+      responses:
+        '200':
+          description: 当前用户信息
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+  /api/users/me/profile:
+    put:
+      summary: 更新个人资料
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nickname:
+                  type: string
+                  description: 用户展示昵称
+                avatarUrl:
+                  type: string
+                  description: 用户头像地址
+                unlockedBadges:
+                  type: array
+                  description: 新增解锁的徽章 ID 列表
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 资料更新成功
+  /api/users/me/career:
+    post:
+      summary: 添加游戏生涯记录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CareerInput'
+      responses:
+        '200':
+          description: 生涯记录添加成功
+  /api/users/me/badges:
+    put:
+      summary: 更新当前佩戴徽章
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [badges]
+              properties:
+                badges:
+                  type: array
+                  description: 当前激活展示的徽章 ID，最多 3 个
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: 徽章更新成功
+  /api/users/me/vlog:
+    post:
+      summary: 新增游戏 Vlog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VlogInput'
+      responses:
+        '200':
+          description: Vlog 创建成功
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, username, email, createdAt]
+      properties:
+        id:
+          type: string
+          description: 用户唯一标识
+        username:
+          type: string
+          description: 用户登录名
+        email:
+          type: string
+          description: 用户邮箱
+        nickname:
+          type: string
+          description: 用户展示昵称
+        avatarUrl:
+          type: string
+          description: 头像图片地址
+        badges:
+          type: array
+          description: 当前激活徽章列表
+          items:
+            type: string
+        unlockedBadges:
+          type: array
+          description: 已解锁徽章列表
+          items:
+            type: string
+        careers:
+          type: array
+          description: 游戏生涯记录列表
+          items:
+            $ref: '#/components/schemas/Career'
+        vlogs:
+          type: array
+          description: 游戏 Vlog 列表
+          items:
+            $ref: '#/components/schemas/Vlog'
+        createdAt:
+          type: string
+          format: date-time
+          description: 用户创建时间
+    Career:
+      type: object
+      required: [id, gameName, hours, rank]
+      properties:
+        id:
+          type: string
+          description: 生涯记录 ID
+        gameName:
+          type: string
+          description: 游戏名称
+        hours:
+          type: integer
+          description: 累计游玩时长
+        rank:
+          type: string
+          description: 当前段位或评级
+    CareerInput:
+      type: object
+      required: [gameName, hours, rank]
+      properties:
+        gameName:
+          type: string
+          description: 游戏名称
+        hours:
+          type: integer
+          description: 游玩时长
+        rank:
+          type: string
+          description: 段位名称
+    Vlog:
+      type: object
+      required: [id, title, gameName, type, createdAt]
+      properties:
+        id:
+          type: string
+          description: Vlog 唯一标识
+        title:
+          type: string
+          description: Vlog 标题
+        gameName:
+          type: string
+          description: 所属游戏名称
+        videoUrl:
+          type: string
+          description: 视频地址
+        coverUrl:
+          type: string
+          description: 封面图地址
+        content:
+          type: string
+          description: 文本内容
+        type:
+          type: string
+          enum: [video, log]
+          description: 内容类型
+        createdAt:
+          type: string
+          format: date-time
+          description: 创建时间
+    VlogInput:
+      type: object
+      required: [title, gameName]
+      properties:
+        title:
+          type: string
+          description: Vlog 标题
+        gameName:
+          type: string
+          description: 游戏名称
+        videoUrl:
+          type: string
+          description: 视频地址
+        coverUrl:
+          type: string
+          description: 封面图地址
+        content:
+          type: string
+          description: 文本内容
+        type:
+          type: string
+          enum: [video, log]
+          description: Vlog 类型

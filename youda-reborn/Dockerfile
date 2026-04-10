@@ -20,5 +20,5 @@ COPY . .
 # Build the applications
 RUN pnpm run build
 
-# Start the apps
-CMD ["pnpm", "start"]
+# Start the primary production app
+CMD ["pnpm", "--filter", "web", "start"]

@@ -1,33 +1,42 @@
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
-import { getUsers, updateUser } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/current-user';
+import { updateUser } from '@/lib/db';
+import { badRequest, internalServerError, unauthorized } from '@/lib/api-errors';
+import { captureRouteException } from '@/lib/monitoring';
 
 export async function PUT(request: Request) {
+  let body:
+    | { nickname?: string; avatarUrl?: string; personalityCode?: string; unlockedBadges?: string[] }
+    | undefined
+
   try {
-    const cookies = request.headers.get('cookie');
-    const sessionTokenMatch = cookies?.match(/sessionToken=([^;]+)/);
-    const token = sessionTokenMatch ? sessionTokenMatch[1] : null;
+    const user = await getAuthenticatedUser(request)
+    if (!user) return unauthorized()
 
-    if (!token) return NextResponse.json({ error: '未登录' }, { status: 401 });
-    const payload = await verifyToken(token);
-    if (!payload || !payload.id) return NextResponse.json({ error: '无效的会话' }, { status: 401 });
+    body = await request.json()
+    const { nickname, avatarUrl, personalityCode, unlockedBadges } = body ?? {}
 
-    const { nickname, avatarUrl, unlockedBadges } = await request.json(); 
+    if (unlockedBadges !== undefined && !Array.isArray(unlockedBadges)) {
+      return badRequest('徽章解锁列表格式错误')
+    }
 
-    const users = getUsers();
-    const user = users.find((u) => u.id === payload.id);
-    if (!user) return NextResponse.json({ error: '用户不存在' }, { status: 404 });
+    const updates: Parameters<typeof updateUser>[1] = {}
+    if (nickname !== undefined) updates.nickname = nickname
+    if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl
+    if (personalityCode !== undefined) updates.personalityCode = personalityCode
+    if (unlockedBadges !== undefined) {
+      updates.unlockedBadges = Array.from(new Set([...(user.unlockedBadges || []), ...unlockedBadges]))
+    }
 
-    const updates: Record<string, unknown> = {};
-    if (nickname !== undefined) updates.nickname = nickname;
-    if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl;
-    if (unlockedBadges !== undefined) updates.unlockedBadges = Array.from(new Set([...(user.unlockedBadges || []), ...unlockedBadges]));
-
-    updateUser(user.id, updates);
+    await updateUser(user.id, updates)
 
     return NextResponse.json({ message: '更新成功' });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    await captureRouteException(request, error, {
+      event: 'user.profile.update.failed',
+      requestBody: body
+    })
+
+    return internalServerError(error);
   }
 }

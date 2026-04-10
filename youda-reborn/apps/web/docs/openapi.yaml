@@ -1,0 +1,636 @@
+openapi: 3.0.3
+info:
+  title: Youda Web API
+  version: 1.1.0
+  description: 有搭 Web 端认证、个人资料、内容与社交主流程接口文档
+servers:
+  - url: https://youda.example.com
+tags:
+  - name: Auth
+    description: 注册、登录、登出、刷新和密码管理
+  - name: User
+    description: 当前登录用户资料、徽章、游戏生涯和 Vlog 管理
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: 用户注册
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: 注册并登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '202':
+          description: 注册成功但会话初始化失败，需要重新登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: 用户登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: 检测到新登录环境，需要前往邮箱完成二次验证
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginChallengeResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/auth/login/verify:
+    post:
+      tags: [Auth]
+      summary: 验证新登录环境挑战链接
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginVerifyRequest'
+      responses:
+        '200':
+          description: 验证成功并签发会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/auth/password/forgot:
+    post:
+      tags: [Auth]
+      summary: 申请密码重置邮件
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '200':
+          description: 无论邮箱是否存在，都返回统一响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/auth/password/reset:
+    post:
+      tags: [Auth]
+      summary: 使用 15 分钟有效的邮件令牌重置密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: 密码重置成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: 使用 Refresh Token 轮换会话
+      responses:
+        '200':
+          description: 会话刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: 主动吊销当前会话并清除 Cookie
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: 获取当前登录用户资料
+      responses:
+        '200':
+          description: 当前用户详情
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/users/me/profile:
+    put:
+      tags: [User]
+      summary: 更新当前用户个人资料
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateRequest'
+      responses:
+        '200':
+          description: 资料更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+  /api/users/me/career:
+    post:
+      tags: [User]
+      summary: 新增当前用户游戏生涯记录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CareerInput'
+      responses:
+        '200':
+          description: 生涯记录新增成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [career]
+                properties:
+                  career:
+                    $ref: '#/components/schemas/Career'
+  /api/users/me/badges:
+    put:
+      tags: [User]
+      summary: 更新当前佩戴徽章
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BadgeUpdateRequest'
+      responses:
+        '200':
+          description: 徽章更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [badges]
+                properties:
+                  badges:
+                    type: array
+                    description: 当前激活展示的徽章 ID 列表
+                    items:
+                      type: string
+  /api/users/me/vlog:
+    post:
+      tags: [User]
+      summary: 新增当前用户 Vlog 或文本日志
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VlogInput'
+      responses:
+        '200':
+          description: Vlog 创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [vlog]
+                properties:
+                  vlog:
+                    $ref: '#/components/schemas/Vlog'
+components:
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: 未登录或令牌失效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 资源冲突，例如邮箱或用户名重复
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: 触发限流
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: 接口执行结果说明
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: 业务错误提示文案
+        details:
+          type: string
+          description: 服务端附加诊断信息，仅开发或内部环境使用
+    RegisterRequest:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+          description: 用户登录名，系统内唯一
+        email:
+          type: string
+          format: email
+          description: 用户邮箱，系统内唯一
+        password:
+          type: string
+          format: password
+          description: 用户密码明文，服务端会进行哈希处理
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          description: 用户名或邮箱
+        password:
+          type: string
+          format: password
+          description: 登录密码明文
+    LoginVerifyRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: 登录挑战邮件中的一次性验证令牌
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          description: 接收密码重置邮件的邮箱地址
+    ResetPasswordRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: 15 分钟有效的密码重置令牌
+        password:
+          type: string
+          format: password
+          description: 新密码明文，最短 8 位
+    LoginChallengeResponse:
+      type: object
+      required: [error, requiresChallenge]
+      properties:
+        error:
+          type: string
+          description: 挑战验证提示文案
+        requiresChallenge:
+          type: boolean
+          description: 是否需要用户前往邮箱完成新环境验证
+    AuthSuccessResponse:
+      type: object
+      required: [message, user]
+      properties:
+        message:
+          type: string
+          description: 登录或注册成功提示
+        user:
+          $ref: '#/components/schemas/UserSummary'
+        securityNotice:
+          type: string
+          description: 额外安全提示，例如登录环境变化提醒
+    ProfileUpdateRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+          description: 用户展示昵称
+        avatarUrl:
+          type: string
+          description: 用户头像地址
+        unlockedBadges:
+          type: array
+          description: 新增解锁的徽章 ID 列表
+          items:
+            type: string
+    BadgeUpdateRequest:
+      type: object
+      required: [badges]
+      properties:
+        badges:
+          type: array
+          description: 当前佩戴的徽章 ID，最多 3 个
+          items:
+            type: string
+    UserSummary:
+      type: object
+      required: [id, username, email]
+      properties:
+        id:
+          type: string
+          description: 用户唯一标识
+        username:
+          type: string
+          description: 用户登录名
+        email:
+          type: string
+          format: email
+          description: 用户邮箱
+    User:
+      type: object
+      required: [id, username, email, createdAt]
+      properties:
+        id:
+          type: string
+          description: 用户唯一标识
+        username:
+          type: string
+          description: 用户登录名
+        email:
+          type: string
+          format: email
+          description: 用户邮箱
+        nickname:
+          type: string
+          description: 用户展示昵称
+        avatarUrl:
+          type: string
+          description: 用户头像 URL
+        badges:
+          type: array
+          description: 当前激活展示的徽章 ID 列表
+          items:
+            type: string
+        unlockedBadges:
+          type: array
+          description: 已解锁徽章 ID 列表
+          items:
+            type: string
+        careers:
+          type: array
+          description: 用户游戏生涯记录列表
+          items:
+            $ref: '#/components/schemas/Career'
+        vlogs:
+          type: array
+          description: 用户发布的 Vlog 或文本日志列表
+          items:
+            $ref: '#/components/schemas/Vlog'
+        createdAt:
+          type: string
+          format: date-time
+          description: 用户创建时间
+    Friend:
+      type: object
+      required: [id, userId, friendId, status, messageRetentionPolicy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: 好友关系记录 ID
+        userId:
+          type: string
+          description: 发起方用户 ID
+        friendId:
+          type: string
+          description: 接收方用户 ID
+        status:
+          type: string
+          description: 好友关系状态
+          enum: [PENDING, ACCEPTED, BLOCKED]
+        messageRetentionPolicy:
+          type: string
+          description: 删除好友时消息保留策略
+          enum: [PRESERVE, DELETE]
+        createdAt:
+          type: string
+          format: date-time
+          description: 关系创建时间
+        updatedAt:
+          type: string
+          format: date-time
+          description: 关系更新时间
+    Match:
+      type: object
+      required: [id, hostUserId, gameName, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: 匹配房间 ID
+        hostUserId:
+          type: string
+          description: 房主用户 ID
+        gameName:
+          type: string
+          description: 房间所属游戏名称
+        personality:
+          type: string
+          description: 房主游戏人格标签
+        duration:
+          type: string
+          description: 预期游玩时长
+        roomCode:
+          type: string
+          description: 房间邀请码
+        status:
+          type: string
+          description: 房间当前状态
+          enum: [PENDING, ACTIVE, ENDED, CANCELLED]
+        createdAt:
+          type: string
+          format: date-time
+          description: 房间创建时间
+        updatedAt:
+          type: string
+          format: date-time
+          description: 房间更新时间
+    ChatMessage:
+      type: object
+      required: [id, senderId, content, messageType, createdAt]
+      properties:
+        id:
+          type: string
+          description: 消息唯一标识
+        matchId:
+          type: string
+          description: 房间消息所属匹配 ID，私聊时为空
+        senderId:
+          type: string
+          description: 消息发送方用户 ID
+        receiverId:
+          type: string
+          description: 私聊接收方用户 ID，房间消息时为空
+        content:
+          type: string
+          description: 消息正文
+        messageType:
+          type: string
+          description: 消息类型
+          enum: [DIRECT, MATCH, SYSTEM]
+        createdAt:
+          type: string
+          format: date-time
+          description: 消息发送时间
+    Career:
+      type: object
+      required: [id, gameName, hours, rank]
+      properties:
+        id:
+          type: string
+          description: 生涯记录唯一标识
+        gameName:
+          type: string
+          description: 游戏名称
+        hours:
+          type: integer
+          description: 累计游玩时长
+        rank:
+          type: string
+          description: 当前段位或评级
+        createdAt:
+          type: string
+          format: date-time
+          description: 生涯记录创建时间
+    CareerInput:
+      type: object
+      required: [gameName, hours, rank]
+      properties:
+        gameName:
+          type: string
+          description: 游戏名称
+        hours:
+          type: integer
+          description: 累计游玩时长
+        rank:
+          type: string
+          description: 当前段位或评级
+    Vlog:
+      type: object
+      required: [id, userId, title, gameName, type, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: Vlog 唯一标识
+        userId:
+          type: string
+          description: 发布者用户 ID
+        title:
+          type: string
+          description: Vlog 标题
+        gameName:
+          type: string
+          description: 所属游戏名称
+        videoUrl:
+          type: string
+          description: 视频地址，文本日志时可为空
+        coverUrl:
+          type: string
+          description: 封面图地址
+        content:
+          type: string
+          description: 文本日志内容或视频说明
+        type:
+          type: string
+          description: 内容类型
+          enum: [VIDEO, LOG]
+        createdAt:
+          type: string
+          format: date-time
+          description: 内容创建时间
+        updatedAt:
+          type: string
+          format: date-time
+          description: 内容更新时间
+    VlogInput:
+      type: object
+      required: [title, gameName, type]
+      properties:
+        title:
+          type: string
+          description: Vlog 标题
+        gameName:
+          type: string
+          description: 游戏名称
+        videoUrl:
+          type: string
+          description: 视频地址
+        coverUrl:
+          type: string
+          description: 封面图地址
+        content:
+          type: string
+          description: 文本说明或日志正文
+        type:
+          type: string
+          description: 内容类型
+          enum: [video, log]

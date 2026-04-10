@@ -1,191 +1,481 @@
-"use client";
+"use client"
 
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Smile, Image as ImageIcon, Minus } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Image as ImageIcon, Mic, Minus, Send, Smile, X } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { EmptyStateCard } from '@/components/empty/EmptyStateCard'
+import { DirectMessageEntry, FriendListEntry } from '@/components/friends/types'
 
-interface Message {
-  id: string;
-  senderId: string;
-  text: string;
-  time: string;
+type PrivateChatProps = {
+  friend: FriendListEntry
+  currentUserId?: string
+  onClose: () => void
 }
 
-interface Friend {
-  id: string;
-  name: string;
-  avatarUrl: string;
-  status: 'online' | 'offline' | 'gaming';
-  gameInfo?: string;
-  personality?: string;
-  isBot?: boolean;
+function formatMessageTime(value: string) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
-interface PrivateChatProps {
-  friend: Friend;
-  onClose: () => void;
-}
+export function PrivateChat({
+  friend,
+  currentUserId,
+  onClose
+}: PrivateChatProps) {
+  const [messages, setMessages] = useState<DirectMessageEntry[]>([])
+  const [inputText, setInputText] = useState('')
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isSending, setIsSending] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const latestTimestampRef = useRef<string | undefined>(undefined)
 
-export function PrivateChat({ friend, onClose }: PrivateChatProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [isMinimized, setIsMinimized] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const loadMessages = useCallback(async (incremental = false) => {
+    if (!incremental) {
+      setIsLoading(true)
+    }
+
+    try {
+      const query = new URLSearchParams({
+        peerId: friend.peerId,
+        limit: '100'
+      })
+
+      if (incremental && latestTimestampRef.current) {
+        query.set('since', latestTimestampRef.current)
+      }
+
+      const response = await fetch(`/api/social/messages?${query.toString()}`, {
+        cache: 'no-store'
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error ?? '聊天记录加载失败')
+      }
+
+      const nextMessages: DirectMessageEntry[] = data.messages ?? []
+      setMessages((current) => {
+        if (!incremental) {
+          return nextMessages
+        }
+
+        const knownIds = new Set(current.map((item) => item.id))
+        return [...current, ...nextMessages.filter((item) => !knownIds.has(item.id))]
+      })
+
+      const latest = nextMessages[nextMessages.length - 1]
+      if (latest?.createdAt) {
+        latestTimestampRef.current = latest.createdAt
+      }
+
+      const unreadIncoming = nextMessages.filter(
+        (message) =>
+          message.senderId === friend.peerId &&
+          !message.receipts.some((receipt) => receipt.readAt)
+      )
+
+      await Promise.all(
+        unreadIncoming.map((message) =>
+          fetch(`/api/social/messages/${message.id}/read`, { method: 'POST' })
+        )
+      )
+
+      setError(null)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '聊天记录加载失败')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [friend.peerId])
 
   useEffect(() => {
-    // Initial greeting from bot
-    if (friend.isBot && messages.length === 0) {
-      setMessages([
-        {
-          id: 'msg_0',
-          senderId: friend.id,
-          text: '你好！我是你的游戏AI小助手"有搭"。关于游戏匹配、性格测评或者组队建议，都可以随时问我哦！',
-          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-        }
-      ]);
+    setMessages([])
+    latestTimestampRef.current = undefined
+    void loadMessages()
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible' || isMinimized) {
+        return
+      }
+
+      void loadMessages(true)
+    }, process.env.NODE_ENV === 'production' ? 5000 : 8000)
+
+    return () => {
+      window.clearInterval(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [friend]);
+  }, [friend.peerId, isMinimized, loadMessages])
 
   useEffect(() => {
     if (!isMinimized) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, isMinimized]);
+  }, [isMinimized, messages])
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
+  const lastOutgoingReceipt = useMemo(() => {
+    const lastOutgoing = [...messages]
+      .reverse()
+      .find((message) => message.senderId === currentUserId && !message.recalledAt)
 
-    const newMsg: Message = {
-      id: Date.now().toString(),
-      senderId: 'me',
-      text: inputText,
-      time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-    };
-
-    setMessages(prev => [...prev, newMsg]);
-    setInputText('');
-
-    // Simulate AI response if chatting with bot
-    if (friend.isBot) {
-      setTimeout(() => {
-        const botResponses = [
-          "这个想法不错！在匹配时，我建议你多关注 S类 (沟通协作型) 的玩家。",
-          "根据你的游戏时长，我觉得你需要一个能在后期稳住心态的队友。",
-          "没问题，我已经帮你记录下来了。还有什么需要我帮忙的吗？"
-        ];
-        const replyText = botResponses[Math.floor(Math.random() * botResponses.length)];
-        
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          senderId: friend.id,
-          text: replyText,
-          time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-        }]);
-      }, 1000);
+    if (!lastOutgoing) {
+      return null
     }
-  };
+
+    const receipt = lastOutgoing.receipts[0]
+    if (!receipt) {
+      return '发送中'
+    }
+
+    if (receipt.readAt) {
+      return '已读'
+    }
+
+    if (receipt.deliveredAt) {
+      return '已送达'
+    }
+
+    return '发送中'
+  }, [currentUserId, messages])
+
+  const handleSend = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!inputText.trim()) {
+      return
+    }
+
+    setIsSending(true)
+
+    try {
+      const response = await fetch('/api/social/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          receiverId: friend.peerId,
+          content: inputText.trim(),
+          contentType: 'TEXT',
+          clientMessageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`
+        })
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error ?? '发送失败')
+      }
+
+      setInputText('')
+      await loadMessages(true)
+    } catch (sendError) {
+      window.alert(sendError instanceof Error ? sendError.message : '发送失败')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  const handleSendAttachment = async (contentType: 'IMAGE' | 'VOICE') => {
+    const attachmentUrl = window.prompt(
+      contentType === 'IMAGE' ? '请输入图片 URL' : '请输入语音 URL'
+    )
+
+    if (!attachmentUrl) {
+      return
+    }
+
+    const response = await fetch('/api/social/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        receiverId: friend.peerId,
+        content: contentType === 'IMAGE' ? '[图片消息]' : '[语音消息]',
+        contentType,
+        attachmentUrl,
+        clientMessageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      })
+    })
+    const data = await response.json()
+
+    if (!response.ok) {
+      window.alert(data.error ?? '发送附件失败')
+      return
+    }
+
+    await loadMessages(true)
+  }
+
+  const handleRecall = async (messageId: string) => {
+    const response = await fetch(`/api/social/messages/${messageId}/recall`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        reason: '用户主动撤回'
+      })
+    })
+
+    const data = await response.json()
+    if (!response.ok) {
+      window.alert(data.error ?? '撤回失败')
+      return
+    }
+
+    await loadMessages(true)
+  }
 
   if (isMinimized) {
     return (
-      <div 
+      <div
         onClick={() => setIsMinimized(false)}
-        className="fixed bottom-0 right-80 mr-6 w-64 bg-white rounded-t-xl shadow-[0_-5px_20px_rgba(0,0,0,0.1)] border border-[#E3E5E8] border-b-0 cursor-pointer hover:bg-[#F7F9FC] transition-colors z-50 flex items-center justify-between p-3"
+        className="fixed bottom-0 right-80 z-50 mr-6 flex w-64 cursor-pointer items-center justify-between rounded-t-xl border border-[#E3E5E8] border-b-0 bg-white p-3 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] transition-colors hover:bg-[#F7F9FC]"
       >
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-[#E3E5E8]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={friend.avatarUrl} alt={friend.name} className="w-full h-full object-cover" />
+          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-[#E3E5E8] bg-[#F2F3F5]">
+            {friend.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={friend.avatarUrl}
+                alt={friend.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-xs font-black">{friend.name.slice(0, 1)}</span>
+            )}
           </div>
-          <span className="text-sm font-bold text-[#181A1F] truncate max-w-[120px]">{friend.name}</span>
+          <span className="max-w-[120px] truncate text-sm font-bold text-[#181A1F]">
+            {friend.name}
+          </span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-2 h-2 rounded-full bg-kook-brand"></div>
-          <Button variant="ghost" size="sm" className="w-6 h-6 p-0 text-[#8D93A5] hover:text-red-500" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+          <div className="h-2 w-2 rounded-full bg-kook-brand" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-[#8D93A5] hover:text-red-500"
+            onClick={(event) => {
+              event.stopPropagation()
+              onClose()
+            }}
+          >
             <X size={14} />
           </Button>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="fixed bottom-0 right-80 mr-6 w-[340px] h-[480px] bg-white rounded-t-2xl shadow-[0_-5px_30px_rgba(0,0,0,0.15)] border border-[#E3E5E8] border-b-0 flex flex-col z-50 overflow-hidden animate-in slide-in-from-bottom-4">
-      {/* Header */}
-      <div className="bg-[#181A1F] px-4 py-3 flex items-center justify-between">
+    <div className="fixed bottom-0 right-80 z-50 mr-6 flex h-[520px] w-[360px] flex-col overflow-hidden rounded-t-2xl border border-[#E3E5E8] border-b-0 bg-white shadow-[0_-5px_30px_rgba(0,0,0,0.15)]">
+      <div className="flex items-center justify-between bg-[#181A1F] px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#33353A]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={friend.avatarUrl} alt={friend.name} className="w-full h-full object-cover" />
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-[#33353A] bg-[#F2F3F5]">
+              {friend.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={friend.avatarUrl}
+                  alt={friend.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-sm font-black text-[#181A1F]">
+                  {friend.name.slice(0, 1)}
+                </span>
+              )}
             </div>
-            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#181A1F] ${
-                friend.status === 'online' ? 'bg-kook-brand' : 
-                friend.status === 'gaming' ? 'bg-[#5C6BFF]' : 'bg-[#C4C9D2]'
-              }`}></div>
+            <div
+              className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#181A1F] ${
+                friend.status === 'online'
+                  ? 'bg-kook-brand'
+                  : friend.status === 'gaming'
+                    ? 'bg-[#5C6BFF]'
+                    : 'bg-[#C4C9D2]'
+              }`}
+            />
           </div>
           <div>
-            <div className="flex items-center gap-1">
-              <span className="text-sm font-bold text-white truncate max-w-[120px]">{friend.name}</span>
-              {friend.isBot && <span className="px-1.5 py-0.5 bg-kook-brand text-white text-[9px] font-black rounded-sm">AI</span>}
+            <div className="max-w-[160px] truncate text-sm font-bold text-white">
+              {friend.name}
             </div>
-            <div className="text-xs text-[#8D93A5]">{friend.status === 'gaming' ? '游戏中' : '在线'}</div>
+            <div className="text-xs text-[#8D93A5]">
+              {friend.status === 'gaming' ? '匹配中' : friend.status === 'online' ? '在线' : '离线'}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="w-8 h-8 p-0 text-[#8D93A5] hover:text-white hover:bg-white/10" onClick={() => setIsMinimized(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-[#8D93A5] hover:bg-white/10 hover:text-white"
+            onClick={() => setIsMinimized(true)}
+          >
             <Minus size={18} />
           </Button>
-          <Button variant="ghost" size="sm" className="w-8 h-8 p-0 text-[#8D93A5] hover:text-red-500 hover:bg-white/10" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-[#8D93A5] hover:bg-white/10 hover:text-red-500"
+            onClick={onClose}
+          >
             <X size={18} />
           </Button>
         </div>
       </div>
 
-      {/* Chat History */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#F7F9FC]">
-        {messages.map(msg => {
-          const isSelf = msg.senderId === 'me';
-          return (
-            <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-[10px] text-[#8D93A5]/70">{msg.time}</span>
-              </div>
-              <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-sm font-medium ${
-                isSelf 
-                  ? 'bg-kook-brand text-white rounded-tr-sm' 
-                  : 'bg-white border border-[#E3E5E8] text-[#181A1F] rounded-tl-sm shadow-sm'
-              }`}>
-                {msg.text}
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex-1 overflow-y-auto bg-[#F7F9FC] p-4">
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-14 animate-pulse rounded-2xl bg-white"
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {!isLoading && error ? (
+          <EmptyStateCard
+            scenario="network-error"
+            icon="📡"
+            onAction={() => void loadMessages()}
+            className="mt-12"
+          />
+        ) : null}
+
+        {!isLoading && !error && messages.length === 0 ? (
+          <EmptyStateCard
+            scenario="no-messages"
+            icon="💬"
+            onAction={() => {
+              const input = document.getElementById('private-chat-input')
+              if (input instanceof HTMLInputElement) {
+                input.focus()
+              }
+            }}
+            className="mt-12"
+          />
+        ) : null}
+
+        {!isLoading && !error && messages.length > 0
+          ? messages.map((message) => {
+              const isSelf = message.senderId === currentUserId
+              const isRecalled = Boolean(message.recalledAt)
+
+              return (
+                <div
+                  key={message.id}
+                  className={`mb-4 flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}
+                >
+                  <div className="mb-1 flex items-baseline gap-2">
+                    <span className="text-[10px] text-[#8D93A5]/70">
+                      {formatMessageTime(message.createdAt)}
+                    </span>
+                    {isSelf && !isRecalled ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleRecall(message.id)}
+                        className="text-[10px] font-bold text-[#8D93A5] hover:text-[#181A1F]"
+                      >
+                        撤回
+                      </button>
+                    ) : null}
+                  </div>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm font-medium ${
+                      isSelf
+                        ? 'rounded-tr-sm bg-kook-brand text-white'
+                        : 'rounded-tl-sm border border-[#E3E5E8] bg-white text-[#181A1F] shadow-sm'
+                    }`}
+                  >
+                    {isRecalled ? (
+                      <span className="italic opacity-70">消息已撤回</span>
+                    ) : message.contentType === 'IMAGE' && message.attachmentUrl ? (
+                      <a
+                        href={message.attachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2"
+                      >
+                        查看图片
+                      </a>
+                    ) : message.contentType === 'VOICE' && message.attachmentUrl ? (
+                      <a
+                        href={message.attachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2"
+                      >
+                        播放语音
+                      </a>
+                    ) : (
+                      message.content
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          : null}
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-3 bg-white border-t border-[#E3E5E8]">
-        <form onSubmit={handleSendMessage}>
-          <div className="flex items-center gap-2 mb-2 px-1">
-            <button type="button" className="text-[#8D93A5] hover:text-[#181A1F] transition-colors"><Smile size={18} /></button>
-            <button type="button" className="text-[#8D93A5] hover:text-[#181A1F] transition-colors"><ImageIcon size={18} /></button>
+      <div className="border-t border-[#E3E5E8] bg-white p-3">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="min-h-12 min-w-12 text-[#8D93A5] transition-colors hover:text-[#181A1F]"
+              onClick={() => void handleSendAttachment('IMAGE')}
+              aria-label="发送图片消息"
+            >
+              <ImageIcon size={18} />
+            </button>
+            <button
+              type="button"
+              className="min-h-12 min-w-12 text-[#8D93A5] transition-colors hover:text-[#181A1F]"
+              onClick={() => void handleSendAttachment('VOICE')}
+              aria-label="发送语音消息"
+            >
+              <Mic size={18} />
+            </button>
+            <button
+              type="button"
+              className="min-h-12 min-w-12 text-[#8D93A5] transition-colors hover:text-[#181A1F]"
+              aria-label="表情占位"
+            >
+              <Smile size={18} />
+            </button>
           </div>
-          <div className="flex gap-2">
-            <input 
-              type="text" 
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="发送消息..." 
-              className="flex-1 bg-[#F2F3F5] rounded-xl px-3 py-2 text-sm text-[#181A1F] focus:outline-none focus:ring-1 focus:ring-kook-brand/50 placeholder:text-[#8D93A5]"
-            />
-            <Button type="submit" variant="kook-brand" size="sm" className="px-3 rounded-xl shadow-sm h-auto" disabled={!inputText.trim()}>
-              <Send size={16} />
-            </Button>
-          </div>
+          {lastOutgoingReceipt ? (
+            <div className="text-xs font-bold text-[#8D93A5]">{lastOutgoingReceipt}</div>
+          ) : null}
+        </div>
+        <form onSubmit={handleSend} className="flex gap-2">
+          <input
+            id="private-chat-input"
+            type="text"
+            value={inputText}
+            onChange={(event) => setInputText(event.target.value)}
+            placeholder="发送消息..."
+            className="flex-1 rounded-xl bg-[#F2F3F5] px-3 py-2 text-sm text-[#181A1F] placeholder:text-[#8D93A5] focus:outline-none focus:ring-1 focus:ring-kook-brand/50"
+          />
+          <Button
+            type="submit"
+            variant="kook-brand"
+            size="sm"
+            className="h-auto rounded-xl px-3 shadow-sm"
+            disabled={!inputText.trim() || isSending}
+          >
+            <Send size={16} />
+          </Button>
         </form>
       </div>
     </div>
-  );
+  )
 }

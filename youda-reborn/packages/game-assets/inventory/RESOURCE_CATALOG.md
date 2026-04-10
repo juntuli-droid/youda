@@ -62,6 +62,7 @@
 - 顶层索引：`inventory/assets-manifest.json`
 - 版本信息：`VERSION.json`
 - 变更记录：`CHANGELOG.md`
+- Web 发布目录：`apps/web/public/game-assets/`
 
 ---
 
@@ -69,4 +70,4 @@
 - 新增资源必须遵循命名规范和目录分层
 - 更新资源后同步更新 manifest
 - 提交前执行完整性校验脚本：
-  - `node resources/game-assets/scripts/verify-resource-pack.mjs`
+  - `node packages/game-assets/scripts/verify-resource-pack.mjs`

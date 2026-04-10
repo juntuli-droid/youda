@@ -7,4 +7,12 @@ build/
 coverage/
 .env
 .env.local
+.env.development
+.env.staging
+.env.production
+apps/web/.env
+apps/web/.env.local
+apps/web/.env.development
+apps/web/.env.staging
+apps/web/.env.production
 *.log

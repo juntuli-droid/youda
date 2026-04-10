@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/Button";
+import { badgeCatalog } from "@/lib/badges";
 
 interface ManageBadgesModalProps {
   unlockedBadges: string[];
@@ -40,21 +42,6 @@ export function ManageBadgesModal({ unlockedBadges, activeBadges, onClose, onSuc
     }
   };
 
-  const allBadges = [
-    { id: "BADGE_012", name: "辐射段位", icon: "/game-assets/badges/icons/rank/badge-rank-radiant-active.png" },
-    { id: "BADGE_004", name: "超凡入圣", icon: "/game-assets/badges/icons/rank/badge-rank-ascendant-active.png" },
-    { id: "BADGE_011", name: "大师", icon: "/game-assets/badges/icons/rank/badge-rank-master-active.png" },
-    { id: "BADGE_015", name: "钻石", icon: "/game-assets/badges/icons/rank/badge-rank-diamond-active.png" },
-    { id: "BADGE_003", name: "白金", icon: "/game-assets/badges/icons/rank/badge-rank-platinum-plus-active.png" },
-    { id: "BADGE_013", name: "黄金", icon: "/game-assets/badges/icons/rank/badge-rank-gold-active.png" },
-    { id: "BADGE_002", name: "白银", icon: "/game-assets/badges/icons/rank/badge-rank-silver-active.png" },
-    { id: "BADGE_014", name: "青铜", icon: "/game-assets/badges/icons/rank/badge-rank-bronze-active.png" },
-    { id: "BADGE_001", name: "黑铁", icon: "/game-assets/badges/icons/rank/badge-rank-iron-active.png" },
-    { id: "BADGE_005", name: "百战不殆", icon: "/game-assets/badges/icons/achievement/badge-achievement-01-active.png" },
-    { id: "BADGE_006", name: "成就2", icon: "/game-assets/badges/icons/achievement/badge-achievement-02-active.png" },
-    { id: "BADGE_007", name: "成就3", icon: "/game-assets/badges/icons/achievement/badge-achievement-03-active.png" },
-  ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="bg-white rounded-3xl w-full max-w-lg p-8 shadow-2xl">
@@ -64,7 +51,7 @@ export function ManageBadgesModal({ unlockedBadges, activeBadges, onClose, onSuc
         </div>
         
         <div className="grid grid-cols-3 gap-4 mb-6 max-h-[60vh] overflow-y-auto pr-2">
-          {allBadges.map(badge => {
+          {badgeCatalog.map(badge => {
             const isUnlocked = unlockedBadges.includes(badge.id);
             const isSelected = selected.includes(badge.id);
             
@@ -78,7 +65,7 @@ export function ManageBadgesModal({ unlockedBadges, activeBadges, onClose, onSuc
                   'border-transparent bg-[#F7F9FC] hover:bg-gray-100 cursor-pointer'
                 }`}
               >
-                <img src={badge.icon} alt={badge.name} className="w-16 h-16 object-contain mb-2" />
+                <Image src={badge.icon} alt={badge.name} width={64} height={64} className="w-16 h-16 object-contain mb-2" />
                 <span className="text-xs font-bold text-[#181A1F]">{badge.name}</span>
                 {!isUnlocked && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/40 backdrop-blur-[1px] rounded-2xl">

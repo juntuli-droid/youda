@@ -1,13 +1,26 @@
 {
-  "name": "database",
+  "name": "@youda/database",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "generate": "prisma generate --schema ./prisma/schema.prisma",
+    "migrate:dev": "prisma migrate dev --schema ./prisma/schema.prisma",
+    "migrate:deploy": "prisma migrate deploy --schema ./prisma/schema.prisma",
+    "migrate:reset": "prisma migrate reset --schema ./prisma/schema.prisma --force",
+    "db:push": "prisma db push --schema ./prisma/schema.prisma",
+    "seed": "tsx ./prisma/seed.ts",
+    "benchmark:serverless": "tsx ./scripts/benchmark-serverless.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "dependencies": {
+    "@prisma/client": "^6.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "prisma": "^6.6.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
 }

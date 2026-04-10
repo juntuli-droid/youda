@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# `apps/web`
 
-## Getting Started
+`apps/web` 是当前项目的主应用，也是默认生产部署入口。
 
-First, run the development server:
+它同时承载：
+
+- Next.js App Router 页面
+- 认证、资料、Vlog、徽章等 Route Handlers
+- 与 Prisma、Redis、SendGrid、Sentry 的集成
+- `public/game-assets` 下的运行时静态资源
+
+## 本地运行
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm --filter web dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认地址：`http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 当前后端边界
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+当前生产主链路以 `apps/web/src/app/api/*` 为准。
 
-## Learn More
+- 页面直接调用同源 Route Handlers
+- `apps/api` 是伴随服务，不是默认线上入口
 
-To learn more about Next.js, take a look at the following resources:
+这样做的好处是：
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- 部署更简单，先保证主产品闭环
+- 后续若要拆分服务，可以逐步把 Route Handlers 迁移到 `apps/api`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 关键目录
 
-## Deploy on Vercel
+- `src/app/*`：页面与 Route Handlers
+- `src/components/*`：界面组件
+- `src/lib/*`：认证、数据库、日志、邮件、限流等基础库
+- `public/game-assets/*`：头像与徽章的运行时静态资源
+- `docs/openapi.yaml`：当前 Web API 文档
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 开发说明
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 开发环境下，部分环境变量会使用安全占位默认值，便于 lint / build / 本地调试
+- Redis 限流在不可用时会降级为 fail-open，避免本地环境被基础设施阻塞
+- SendGrid 在开发占位配置下不会真实发信，只会输出日志
